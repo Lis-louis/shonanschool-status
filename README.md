@@ -1,6 +1,6 @@
 # キャンパスハブ（my-school-status）
 
-湘南工科大学の Moodle・Campus Square・大学メールを1つにまとめる macOS アプリ（SwiftUI）。
+湘南工科大学の Moodle・Campus Square・大学メールを1つにまとめるアプリ。Mac版（SwiftUI）と Windows版（Electron、`windows/`）があります。
 見た目は鈴（`../suzu_ai`）と同じ配色・部品で、鈴の画像を使っています（昼／夜はmacOSの外観に連動）。
 
 ## 画面
@@ -61,6 +61,41 @@ Google は、アプリに埋め込んだブラウザでのログインを認め�
 ## うまく読み込めないとき
 
 「設定 → 接続の診断」か `~/Library/Logs/CampusHub/diagnostics.log` に、どこで止まったか（開いたページのホスト名・パス、件数、エラー）が出ます。ID・パスワード・メールや授業の内容は書きません。
+
+## インストーラーを作る
+
+| | コマンド | できるもの |
+| --- | --- | --- |
+| Mac | `./scripts/build-pkg.sh` | `dist/CampusHub-0.2.0.pkg`（/Applications/キャンパスハブ.app に入る） |
+| Windows | `./scripts/build-windows.sh` | `dist/windows/CampusHub-Setup-0.2.0.exe`（Mac上で作れる。Node.js が必要） |
+
+- どちらも開発者署名はしていません。Mac は初回「右クリック → 開く」、Windows は SmartScreen の「詳細情報 → 実行」が必要です。
+- Windows版は `./scripts/build-windows.sh --run` で Mac 上でも画面を確認できます（`--test` はテストだけ）。
+- Windows 上で作るとき（Node.js の LTS 版を入れておく）:
+  ```bat
+  cd windows
+  npm install --save-dev --save-exact electron electron-builder
+  npm test
+  npm run dist:win
+  ```
+  → `dist\windows\CampusHub-Setup-0.2.0.exe`。`npm start` でインストールせずに起動できます。
+
+## Windows版（`windows/`）
+
+Mac版と同じ画面・同じ読み取り方（自動ログイン → 画面に出さないブラウザで読み取り、Gmail API）を Electron で作ったものです。
+
+| Mac版 | Windows版 |
+| --- | --- |
+| キーチェーン | Windows の DPAPI で暗号化して `%APPDATA%\キャンパスハブ\secrets.json` に保存（Electron safeStorage） |
+| UserDefaults | `%APPDATA%\キャンパスハブ\settings.json` |
+| `~/Library/Logs/CampusHub/diagnostics.log` | `%APPDATA%\キャンパスハブ\logs\diagnostics.log` |
+| WKWebView（`.defaultClient` で自動入力） | Chromium（隔離された実行環境で自動入力。Cookie は `persist:campushub` に保存） |
+| 締切の通知（予約） | アプリを起動している間だけ、Windows の通知センターに出す |
+
+- 起動時に開く画面：`CampusHub.exe --section calendar`
+- 構成：`src/main/`（ログイン・読み取り・Gmail・保存）、`src/renderer/`（画面）、`test/`（`npm test`）
+- 大学ごとの初期値は `windows/src/main/config.js`（Mac版の `DefaultConfig.swift` と同じ値。片方を変えたらもう片方も）
+- ページ内で動かすスクリプトは `windows/src/main/scripts.js`（Mac版の `Scripts.swift` と同じ内容）
 
 ## 起動方法
 
