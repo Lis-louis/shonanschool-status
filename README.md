@@ -66,8 +66,8 @@ Google は、アプリに埋め込んだブラウザでのログインを認め�
 
 | | コマンド | できるもの |
 | --- | --- | --- |
-| Mac | `./scripts/build-pkg.sh` | `dist/CampusHub-0.2.0.pkg`（/Applications/キャンパスハブ.app に入る） |
-| Windows | `./scripts/build-windows.sh` | `dist/windows/CampusHub-Setup-0.2.0.exe`（Mac上で作れる。Node.js が必要） |
+| Mac | `./scripts/build-pkg.sh` | `CampusHub-0.2.0.pkg`（リポジトリ直下。/Applications/キャンパスハブ.app に入る） |
+| Windows | `./scripts/build-windows.sh` | `CampusHub-Setup-0.2.0.exe`（リポジトリ直下。Mac上でも Windows 上（`cd windows && npm run dist:win`）でも作れる。Node.js が必要） |
 
 - どちらも開発者署名はしていません。Mac は初回「右クリック → 開く」、Windows は SmartScreen の「詳細情報 → 実行」が必要です。
 - Windows版は `./scripts/build-windows.sh --run` で Mac 上でも画面を確認できます（`--test` はテストだけ）。

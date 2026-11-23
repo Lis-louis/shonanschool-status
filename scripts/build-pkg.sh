@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Mac 用のインストーラー（.pkg）を作る。
-#   ./scripts/build-pkg.sh   → dist/CampusHub-<版>.pkg
+#   ./scripts/build-pkg.sh   → CampusHub-<版>.pkg（リポジトリ直下）
 # ダブルクリックすると /Applications/キャンパスハブ.app に入ります。
 # Apple の開発者署名はしていないため、初回は「右クリック → 開く」か
 # 「システム設定 → プライバシーとセキュリティ → このまま開く」が必要です。
@@ -11,7 +11,7 @@ NAME="キャンパスハブ"
 BUNDLE_ID="${BUNDLE_ID:-local.campushub.app}"
 VERSION="${VERSION:-0.2.0}"
 APP="build/${NAME}.app"
-OUT="dist/CampusHub-${VERSION}.pkg"
+OUT="CampusHub-${VERSION}.pkg"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -55,7 +55,6 @@ cat > "$TMP/resources/welcome.html" <<HTML
 </body>
 HTML
 
-mkdir -p dist
 productbuild --distribution "$TMP/distribution.xml" \
   --package-path "$TMP" \
   --resources "$TMP/resources" \
