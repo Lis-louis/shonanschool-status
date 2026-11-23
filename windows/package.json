@@ -1,0 +1,42 @@
+{
+  "name": "campushub",
+  "productName": "キャンパスハブ",
+  "version": "0.2.0",
+  "description": "湘南工科大学の Moodle・Campus Square・大学メールを1つにまとめるアプリ（Windows版）",
+  "author": "キャンパスハブ",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/",
+    "dist:win": "electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "local.campushub.app",
+    "productName": "キャンパスハブ",
+    "copyright": "キャンパスハブ",
+    "directories": { "output": "../dist/windows", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "extraResources": [{ "from": "../Sources/CampusHub/Resources/Appearance", "to": "Appearance", "filter": ["*.jpg"] }],
+    "asar": true,
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.png",
+      "artifactName": "CampusHub-Setup-${version}.${ext}",
+      "executableName": "CampusHub"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "キャンパスハブ",
+      "uninstallDisplayName": "キャンパスハブ",
+      "installerLanguages": ["ja_JP"],
+      "language": "1041",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

@@ -60,3 +60,11 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+build/
+
+# macOS
+.DS_Store
+
+# 配布用のインストーラー（scripts/build-pkg.sh / build-windows.sh）
+dist/
+RFMT/
