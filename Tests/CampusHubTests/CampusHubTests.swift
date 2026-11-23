@@ -1,0 +1,246 @@
+import Foundation
+import Testing
+@testable import CampusHub
+
+@Suite struct SafeURLTests {
+    @Test func acceptsOnlyHTTPS() {
+        #expect(SafeURL.https("https://moodle2026.shonan-it.ac.jp") != nil)
+        #expect(SafeURL.https("http://moodle2026.shonan-it.ac.jp") == nil)
+        #expect(SafeURL.https("javascript:alert(1)") == nil)
+        #expect(SafeURL.https("https://user:pass@host.example") == nil)
+    }
+
+    @Test func trustedDomainMatchesOnlySubdomains() {
+        let d = "shonan-it.ac.jp"
+        #expect(SafeURL.isTrusted(URL(string: "https://moodle2026.shonan-it.ac.jp/my/"), domain: d))
+        #expect(SafeURL.isTrusted(URL(string: "https://shonan-it.ac.jp/"), domain: d))
+        #expect(!SafeURL.isTrusted(URL(string: "https://evilshonan-it.ac.jp/"), domain: d))
+        #expect(!SafeURL.isTrusted(URL(string: "https://shonan-it.ac.jp.evil.example/"), domain: d))
+        #expect(!SafeURL.isTrusted(URL(string: "http://moodle2026.shonan-it.ac.jp/"), domain: d))
+    }
+
+    @Test func stableCampusURLDropsSessionKeys() {
+        let u = URL(string: "https://portal.shonan-it.ac.jp/campusweb/campussquare.do?_flowExecutionKey=_c1_k2&_flowId=RSW0001000-flow&x=1#top")!
+        #expect(SafeURL.stableCampusURL(u) == "https://portal.shonan-it.ac.jp/campusweb/campussquare.do?_flowId=RSW0001000-flow")
+        let v = URL(string: "https://portal.shonan-it.ac.jp/campusweb/portal.do?page=main&_flowExecutionKey=abc")!
+        #expect(SafeURL.stableCampusURL(v) == "https://portal.shonan-it.ac.jp/campusweb/portal.do?page=main")
+    }
+
+    @Test func defaultConfigPointsToLoginHosts() {
+        let c = DefaultConfig.university
+        #expect(c.loginHost(for: .moodle) == "moodle2026.shonan-it.ac.jp")
+        #expect(c.loginHost(for: .campus) == "portal.shonan-it.ac.jp")
+        #expect(c.moodleLoginURL?.absoluteString == "https://moodle2026.shonan-it.ac.jp/login/index.php")
+    }
+}
+
+@Suite struct MoodleParserTests {
+    @Test func parsesAjaxBundle() throws {
+        let json = """
+        {"courses":{"data":{"courses":[{"id":5,"fullname":"情報&amp;数理","shortname":"IM","coursecategory":"工学部","progress":40,"viewurl":"https://moodle2026.shonan-it.ac.jp/course/view.php?id=5"}],"nextoffset":1}},
+         "events":{"data":{"events":[{"id":9,"name":"レポート1 の提出期限","timesort":1796050740,"url":"https://evil.example/x","course":{"fullname":"情報&amp;数理"}}]}},
+         "notices":{"error":"accessexception"}}
+        """
+        let snap = try MoodleParser.parse(json, config: DefaultConfig.university)
+        #expect(snap.courses.first?.fullName == "情報&数理")
+        #expect(snap.courses.first?.progress == 40)
+        #expect(snap.deadlines.first?.due == Date(timeIntervalSince1970: 1796050740))
+        #expect(snap.deadlines.first?.url == nil) // 大学外のURLはリンクにしない
+        #expect(snap.notices.isEmpty)
+        #expect(snap.warnings.count == 1)
+    }
+
+    @Test func notLoggedInIsReported() {
+        #expect(throws: MoodleParser.ParseError.self) { try MoodleParser.parse(#"{"fatal":"nosesskey"}"#, config: DefaultConfig.university) }
+    }
+}
+
+@Suite struct TimetableTests {
+    @Test func classesForDaySkipEmptySlots() {
+        let tt = Timetable(days: ["月", "火"], periods: [
+            .init(label: "1限", byDay: ["月": "講義A\n1号館", "火": ""]),
+            .init(label: "2限", byDay: ["月": "-", "火": "演習B"]),
+        ])
+        #expect(tt.classes(on: "月").map(\.period) == ["1限"])
+        #expect(tt.classes(on: "火").map(\.text) == ["演習B"])
+        #expect(tt.classes(on: "水").isEmpty)
+    }
+
+    @Test func dayChar() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        let monday = DateComponents(calendar: cal, year: 2026, month: 11, day: 23, hour: 12).date!
+        #expect(Timetable.dayChar(for: monday, calendar: cal) == "月")
+    }
+}
+
+@Suite struct MiscTests {
+    @Test func urgency() {
+        let now = Date(timeIntervalSince1970: 0)
+        func d(_ h: Double) -> Deadline { Deadline(id: "x", title: "t", course: nil, due: now.addingTimeInterval(h * 3600), url: nil) }
+        #expect(d(-1).urgency(now: now) == .overdue)
+        #expect(d(5).urgency(now: now) == .urgent)
+        #expect(d(48).urgency(now: now) == .soon)
+        #expect(d(100).urgency(now: now) == .normal)
+    }
+
+    @Test func importance() {
+        #expect(Importance.isImportant("【休講】情報数理"))
+        #expect(!Importance.isImportant("図書館のお知らせ"))
+    }
+
+    @Test func plainText() {
+        #expect("<b>A&amp;B</b>&nbsp;".plainText == "A&B")
+    }
+}
+
+@Suite struct MailClassifierTests {
+    let domain = "shonan-it.ac.jp"
+    func mail(_ subject: String, _ snippet: String, from: String = "kyomu@sit.shonan-it.ac.jp", date: Date) -> MailMessage {
+        var m = MailMessage(id: "1", threadId: "1", subject: subject, from: "教務課", fromAddress: from, date: date, snippet: snippet, unread: true)
+        MailClassifier.classify(&m, trustedDomain: domain, now: date)
+        return m
+    }
+    var ref: Date {
+        var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        return DateComponents(calendar: c, year: 2026, month: 11, day: 23, hour: 10).date!
+    }
+
+    @Test func actionWithDeadline() {
+        let m = mail("【重要】奨学金継続手続き", "提出期限は12月5日17時までです。", date: ref)
+        #expect(m.category == .action)
+        #expect(m.isFromSchool)
+        let c = Calendar.current.dateComponents([.month, .day, .hour], from: m.dueDate!)
+        #expect(c.month == 12 && c.day == 5 && c.hour == 17)
+    }
+
+    @Test func overdueReminder() {
+        let m = mail("【督促】履修登録が未完了の方へ", "まだ完了していません", date: ref)
+        #expect(m.category == .action)
+        #expect(m.looksOverdue)
+    }
+
+    @Test func cancellationWins() {
+        #expect(mail("休講のお知らせ", "12/2 3限は休講です。", date: ref).category == .classChange)
+    }
+
+    @Test func externalAdIsOther() {
+        let m = mail("セール", "今だけ", from: "news@shop.example", date: ref)
+        #expect(m.category == .other)
+        #expect(!m.isFromSchool)
+    }
+
+    @Test func lookalikeDomainIsNotSchool() {
+        #expect(!mail("お知らせ", "", from: "x@evil-shonan-it.ac.jp", date: ref).isFromSchool)
+    }
+
+    @Test func yearRollsOverForJanuary() {
+        let d = DateExtractor.findDeadline(in: "1月10日までに提出", reference: ref)!
+        #expect(Calendar.current.component(.year, from: d) == 2027)
+    }
+
+    @Test func noDeadlineWithoutMarker() {
+        #expect(DateExtractor.findDeadline(in: "12月5日に説明会を開催します", reference: ref) == nil)
+    }
+
+    @Test func parseFromHeader() {
+        #expect(GmailClient.parseFrom("\"教務課\" <kyomu@sit.shonan-it.ac.jp>") == ("教務課", "kyomu@sit.shonan-it.ac.jp"))
+        #expect(GmailClient.parseFrom("a@b.jp") == ("a@b.jp", "a@b.jp"))
+    }
+}
+
+@Suite struct MoodleCalendarTests {
+    @Test func upcomingFillsInWhenActionEventsFail() throws {
+        let json = """
+        {"events":{"error":"servicenotavailable"},
+         "upcoming":{"data":{"events":[
+           {"id":3,"name":"課題2 期限","timestart":1796050740,"timesort":1796050740,"eventtype":"due","modulename":"assign","course":{"fullname":"情報数理"}},
+           {"id":4,"name":"オフィスアワー","timestart":1796000000,"timeduration":3600,"eventtype":"course"}]}}}
+        """
+        let s = try MoodleParser.parse(json, config: DefaultConfig.university)
+        #expect(s.deadlines.count == 1)
+        #expect(s.deadlines[0].needsAction == false)
+        #expect(s.upcoming.count == 2)
+        #expect(s.upcoming.first { $0.id == "c-4" }?.kind == .moodleEvent)
+        #expect(s.upcoming.first { $0.id == "c-4" }?.end != nil)
+    }
+
+    @Test func monthViewIsFlattenedAndDeduped() throws {
+        let json = """
+        {"month":{"data":{"weeks":[{"days":[{"events":[{"id":1,"name":"A","timestart":1796000000,"eventtype":"due"}]},{"events":[]}]},
+                                    {"days":[{"events":[{"id":1,"name":"A","timestart":1796000000,"eventtype":"due"},{"id":2,"name":"B","timestart":1796100000}]}]}]}}}
+        """
+        let items = try MoodleParser.parseMonth(json, config: DefaultConfig.university)
+        #expect(items.map(\.id) == ["c-1", "c-2"])
+        #expect(items[0].kind == .deadline)
+    }
+
+    @Test func oldPreferencesStillDecode() throws {
+        let old = #"{"showTodayClasses":false,"autoLogin":false}"#.data(using: .utf8)!
+        let p = try JSONDecoder().decode(AppPreferences.self, from: old)
+        #expect(p.showTodayClasses == false)
+        #expect(p.autoLogin == false)
+        #expect(p.showTimetableInCalendar == true)
+    }
+
+    @Test func numericEntities() {
+        #expect("It&#39;s &#x30A2;&amp;B".plainText == "It's ア&B")
+    }
+}
+
+@Suite struct LoopbackTests {
+    @Test func receivesAuthorizationCode() async throws {
+        let server = try LoopbackServer()
+        let port = try await server.start()
+        #expect(port > 0)
+        async let result = server.waitForCallback(timeout: 10)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/?code=abc123&state=xyz")!)
+        #expect(String(data: data, encoding: .utf8)?.contains("連携ができました") == true)
+        let params = try await result
+        #expect(params["code"] == "abc123")
+        #expect(params["state"] == "xyz")
+        server.stop()
+    }
+}
+
+@Suite struct TimetableSplitTests {
+    @Test func codeLineMovesAside() {
+        let r = Timetable.split("B30A02K1\n共通基盤ワークショップ1B\n担当 A\n2.0単位")
+        #expect(r.code == "B30A02K1")
+        #expect(r.title == "共通基盤ワークショップ1B")
+        #expect(r.rest == ["担当 A", "2.0単位"])
+    }
+    @Test func plainTitleKept() {
+        let r = Timetable.split("情報数理\n1号館101")
+        #expect(r.code == nil)
+        #expect(r.title == "情報数理")
+    }
+}
+
+@Suite struct ClosedEventTests {
+    @Test func closedQuestionnaireIsDroppedButLateAssignmentKept() throws {
+        let past = Int(Date.now.timeIntervalSince1970) - 86400
+        let json = """
+        {"events":{"data":{"events":[
+          {"id":1,"name":"出席アンケート（アンケート終了）","timesort":\(past),"eventtype":"close","modulename":"questionnaire","action":{"actionable":true}},
+          {"id":2,"name":"レポート1 期限","timesort":\(past),"eventtype":"due","modulename":"assign","action":{"actionable":true}},
+          {"id":3,"name":"アンケート開始","timesort":\(past + 200000),"eventtype":"open","modulename":"questionnaire"}]}}}
+        """
+        let s = try MoodleParser.parse(json, config: DefaultConfig.university)
+        #expect(s.deadlines.map(\.id) == ["m-2"])
+    }
+}
+
+@Suite struct FormReceiptTests {
+    @Test func coreTitleStripsDecorations() {
+        #expect(GmailClient.coreTitle("(出席課題) 出席アンケート (締切：11月9日23:59)") == "出席アンケート")
+        #expect(GmailClient.coreTitle("【情】第8回 出席確認") == "第8回出席確認")
+    }
+    @Test func receiptMatchesTitleNearDueDate() {
+        let due = Date(timeIntervalSince1970: 1_800_000_000)
+        let d = Deadline(id: "m-1", title: "(出席課題) 第8回 出席確認 (締切)", course: nil, due: due, url: nil)
+        #expect(GmailClient.hasReceipt(for: d, in: [("「第8回 出席確認」の回答のコピー", due.addingTimeInterval(-3600))]))
+        #expect(!GmailClient.hasReceipt(for: d, in: [("「第8回 出席確認」の回答のコピー", due.addingTimeInterval(-40 * 86400))]))
+        #expect(!GmailClient.hasReceipt(for: d, in: [("「第9回 出席確認」の回答のコピー", due)]))
+    }
+}
