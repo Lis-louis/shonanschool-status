@@ -80,10 +80,11 @@ function placeBrowsers() {
     const show = browserPlacement && browserPlacement.service === k;
     if (show) {
       const r = browserPlacement.bounds;
-      b.view.setBounds({ x: Math.round(r.x), y: Math.round(r.y), width: Math.max(0, Math.round(r.width)), height: Math.max(0, Math.round(r.height)) });
+      b.place({ x: Math.round(r.x), y: Math.round(r.y), width: Math.max(0, Math.round(r.width)), height: Math.max(0, Math.round(r.height)) }, true);
       b.loadIfNeeded();
+    } else {
+      b.place(null, false);
     }
-    b.view.setVisible(!!show);
   }
 }
 
@@ -143,9 +144,7 @@ function createWindow() {
   win.once('ready-to-show', () => win.show());
 
   for (const s of ['moodle', 'campus']) {
-    const b = new BrowserController(s, store);
-    store.browsers[s] = b;
-    win.contentView.addChildView(b.view);
+    store.browsers[s] = new BrowserController(s, store, win.contentView);
   }
 
   // 画面そのものは外のページへ移らない（リンクは既定のブラウザで開く）
@@ -159,6 +158,7 @@ function createWindow() {
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   // 裏の読み取り用ウィンドウが残っていても、メインのウィンドウを閉じたら終了する
+  win.on('close', () => { for (const b of Object.values(store.browsers)) b.dispose(); });
   win.on('closed', () => { win = null; app.quit(); });
 }
 
@@ -209,17 +209,17 @@ function registerIPC() {
     browserNav: (service, cmd) => {
       const b = store.browsers[service];
       if (!b) return;
-      const h = b.wc.navigationHistory;
-      if (cmd === 'back' && h.canGoBack()) h.goBack();
-      if (cmd === 'forward' && h.canGoForward()) h.goForward();
-      if (cmd === 'reload') b.wc.reload();
+      const h = b.wc?.navigationHistory;
+      if (cmd === 'back' && h?.canGoBack()) h.goBack();
+      if (cmd === 'forward' && h?.canGoForward()) h.goForward();
+      if (cmd === 'reload') b.wc?.reload();
       if (cmd === 'home') b.load(Urls.startURL(store.config, service));
       if (cmd === 'fill') b.fillCredentialsNow();
       if (cmd === 'dismiss') b.setMessage(null);
     },
     browserMenu: (service, x, y) => {
       const b = store.browsers[service];
-      if (!b || !win) return;
+      if (!b || !win || !b.wc) return;
       const url = b.wc.getURL();
       const items = [];
       if (service === 'campus' && SafeURL.https(url)) {
