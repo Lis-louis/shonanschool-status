@@ -68,5 +68,3 @@ build/
 # 配布用のインストーラー（scripts/build-pkg.sh / build-windows.sh）
 dist/
 RFMT/
-/CampusHub-*.pkg
-/CampusHub-Setup-*.exe
