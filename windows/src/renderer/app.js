@@ -512,7 +512,7 @@ function settingsView() {
     title: '大学・URL', ic: 'building',
     body: field('大学名', 'universityName', { isURL: false }) + field('大学のドメイン（自動入力・アプリ内表示を許可）', 'trustedDomain', { isURL: false })
       + field('Moodle', 'moodleBaseURL') + field('Campus Square ログイン', 'campusSquare.login') + field('Campus Square ポータル', 'campusSquare.portal')
-      + field('時間割', 'campusSquare.timetable') + field('休講・補講（推定）', 'campusSquare.cancellations') + field('成績（推定）', 'campusSquare.grades')
+      + field('時間割', 'campusSquare.timetable') + field('休講・補講', 'campusSquare.cancellations') + field('成績（推定）', 'campusSquare.grades')
       + field('シラバス（推定）', 'campusSquare.syllabus') + field('出席管理', 'campusSquare.attendance')
       + '<div class="small">「推定」のページが違う場合は、Campus Squareの「ブラウザ」で正しいページを開き、右上の「…」から設定できます。</div>'
       + `<div class="row">${btn('URLを初期値に戻す', 'resetConfig')}</div>`,

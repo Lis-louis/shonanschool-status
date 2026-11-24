@@ -275,16 +275,27 @@ enum ThisWeek {
         return lines.filter { $0.contains("休講") }.compactMap { t in guessDate(t, now: now, calendar: calendar).map { (t, $0) } }
     }
 
-    /// 締切の科目に、今日から締切までの間の休講があるか（「来週は休講なので2週間前から出ている課題」）
+    /// Moodle の短縮名に入っている時間割コード（「後学期_微分積分学（メ）-B31N04K101」→ B31N04K1）
+    static func courseCode(_ shortName: String?) -> String? {
+        guard let s = shortName?.precomposedStringWithCompatibilityMapping,
+              let r = s.range(of: "-[A-Z0-9]{6,}[0-9]{2}$", options: .regularExpression) else { return nil }
+        return String(s[r].dropFirst().dropLast(2))
+    }
+
+    /// 締切の科目に、今日から締切までの間の休講があるか（「来週は休講なので2週間前から出ている課題」）。
+    /// code（時間割コード）があれば休講の行のコードでも照合する
     static func cancelledBefore(course: String, due: Date, in list: [(text: String, date: Date)],
-                                now: Date = .now, calendar: Calendar = .current) -> (text: String, date: Date)? {
+                                now: Date = .now, calendar: Calendar = .current, code: String? = nil) -> (text: String, date: Date)? {
         func core(_ s: String) -> String {
             Timetable.courseKey(s).replacingOccurrences(of: "\\([^)]*\\)", with: "", options: .regularExpression)
         }
         let key = core(course)
-        guard key.count >= 3 else { return nil }
         let start = calendar.startOfDay(for: now)
-        return list.first { $0.date >= start && $0.date <= due && core($0.text).contains(key) }
+        return list.first { x in
+            guard x.date >= start, x.date <= due else { return false }
+            if let code, x.text.precomposedStringWithCompatibilityMapping.contains(code) { return true }
+            return key.count >= 3 && core(x.text).contains(key)
+        }
     }
 }
 

@@ -233,7 +233,7 @@ scripts/                  build scripts for the .app, .pkg, and Windows .exe
 | Moodle | `https://moodle2026.shonan-it.ac.jp` | Confirmed (sign-in form too) |
 | Campus Square | `https://portal.shonan-it.ac.jp/campusweb/` | Confirmed (sign-in form too) |
 | Timetable | `campussquare.do?_flowId=RSW0001000-flow` | Confirmed (portal menu "履修登録・登録状況照会") |
-| Cancellations / make-up classes | `_flowId=KHW0001100-flow` | **Estimated** |
+| Cancellations / make-up classes | `_flowId=KHW0001100-flow` | Confirmed (page "休講補講参照"; read in list format for the next 5 weeks) |
 | Grades / syllabus | `SIW0001300-flow` / `SYW0001000-flow` | **Estimated** |
 | Attendance | `https://syusseki.shonan-it.ac.jp/campusaa/` | From a link on the sign-in page |
 | University mail | Google Workspace (Gmail) | Confirmed via DNS (MX records) |
@@ -242,7 +242,7 @@ If an estimated page is wrong: open the correct page in Campus Square's **Browse
 
 ### Known limitations
 
-- The URLs for cancellations, grades, and the syllabus are estimated, so they may not match the university's pages (fix them as described above).
+- The URLs for grades and the syllabus are estimated, so they may not match the university's pages (fix them as described above).
 - On Windows, deadline notifications appear in the notification center only while the app is running.
 - If the university changes its sites, reading may stop working (check **Settings → Connection diagnostics**).
 - The app is shown in Japanese only.

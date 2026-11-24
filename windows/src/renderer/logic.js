@@ -177,14 +177,21 @@ function cancellations(S, now = Date.now()) {
   return lines.filter(l => /休講/.test(l)).map(text => ({ text, date: guessDate(text, now) })).filter(x => x.date != null);
 }
 
-/** 締切の科目に、今日から締切までの間の休講があるか（「来週は休講なので2週間前から出ている課題」）。あればその休講 */
-function cancelledBefore(course, due, list, now = Date.now()) {
+/** Moodle の短縮名に入っている時間割コード（「後学期_微分積分学（メ）-B31N04K101」→ B31N04K1）。無ければ null */
+function courseCode(shortName) {
+  const m = String(shortName ?? '').normalize('NFKC').match(/-([A-Z0-9]{6,})\d{2}$/);
+  return m ? m[1] : null;
+}
+
+/** 締切の科目に、今日から締切までの間の休講があるか（「来週は休講なので2週間前から出ている課題」）。あればその休講。
+ *  code（時間割コード）があれば休講の行のコードでも照合する */
+function cancelledBefore(course, due, list, now = Date.now(), code = null) {
   // 科目名から【】・[曜限]・学期・（メ）などのかっこを除いた中心の名前で、休講の行に含まれるかを見る
   const core = Timetable.courseKey(course).replace(/\([^)]*\)/g, '');
-  if (core.length < 3) return null;
   const start = startOfDay(now);
   return list.find(x => x.date >= start && x.date <= due
-    && Timetable.courseKey(x.text).replace(/\([^)]*\)/g, '').includes(core)) ?? null;
+    && ((code && x.text.normalize('NFKC').includes(code))
+      || (core.length >= 3 && Timetable.courseKey(x.text).replace(/\([^)]*\)/g, '').includes(core)))) ?? null;
 }
 
 /** Moodle の未完了課題 ＋ メールで見つけた要対応。
@@ -194,13 +201,15 @@ function todos(S, includeDone = false, now = Date.now(), { thisWeek = false } = 
   const done = new Set(S.doneIDs);
   const items = [];
   const cancels = thisWeek ? cancellations(S, now) : [];
+  const courses = S.moodle.value?.courses ?? [];
+  const codeOf = name => courseCode(courses.find(c => c.fullName === name)?.shortName);
   for (const d of S.moodle.value?.deadlines ?? []) {
     if (SubmissionStatus.isDone(d.status)) continue;
     let early = null;
     if (thisWeek) {
       if (d.status === 'notOpenYet') continue;
       if (Math.floor((d.due - now) / DAY) > WEEK_DAYS) {
-        const c = d.course ? cancelledBefore(d.course, d.due, cancels, now) : null;
+        const c = d.course ? cancelledBefore(d.course, d.due, cancels, now, codeOf(d.course)) : null;
         if (c) early = `締切は先ですが、${Fmt.md(c.date)}が休講なので早めに出ている課題です`;
         else if (d.status === 'notSubmitted' || d.status === 'form') early = '締切は先ですが、もう提出できます（早めに出ている課題）';
         else continue;
@@ -286,5 +295,5 @@ function isPlaceholder(u) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus, MailCategory, todos, calendarItems, validURL, isPlaceholder, gmailURL, guessDate, cancellations, cancelledBefore, WEEK_DAYS };
+  module.exports = { esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus, MailCategory, todos, calendarItems, validURL, isPlaceholder, gmailURL, guessDate, cancellations, cancelledBefore, courseCode, WEEK_DAYS };
 }

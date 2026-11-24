@@ -39,7 +39,7 @@ struct SettingsView: View {
                 Field(title: "Campus Square ログイン", text: $store.config.campusSquare.login)
                 Field(title: "Campus Square ポータル", text: $store.config.campusSquare.portal)
                 Field(title: "時間割（推定）", text: $store.config.campusSquare.timetable)
-                Field(title: "休講・補講（推定）", text: $store.config.campusSquare.cancellations)
+                Field(title: "休講・補講", text: $store.config.campusSquare.cancellations)
                 Field(title: "成績（推定）", text: $store.config.campusSquare.grades)
                 Field(title: "シラバス（推定）", text: $store.config.campusSquare.syllabus)
                 Field(title: "出席管理", text: $store.config.campusSquare.attendance)

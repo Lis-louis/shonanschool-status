@@ -299,3 +299,29 @@ test('ホームの「やること」は今週の分だけ（受付前・あと8�
   assert.equal(L.guessDate('1月8日 休講', now), new Date(2027, 0, 8).getTime());
   assert.equal(L.guessDate('休講のお知らせ', now), null);
 });
+
+test('休講補講参照（一覧形式）の行から、時間割コードでも科目を照合する', () => {
+  const now = new Date('2026-11-24T13:49:00+09:00').getTime();
+  const at = s => new Date(s).getTime();
+  assert.equal(L.courseCode('後学期_微分積分学（メ）-B31N04K101'), 'B31N04K1');
+  assert.equal(L.courseCode('【情】通年活動_ＢＹＯＤ対応'), null);
+  const S = {
+    doneIDs: [], config: C,
+    moodle: { value: {
+      courses: [{ id: 1, fullName: '【情】後学期_微分積分学（メ）[金1]', shortName: '後学期_微分積分学（メ）-B31N04K101', url: 'u' }],
+      deadlines: [{ id: 'd', title: '演習', course: '【情】後学期_微分積分学（メ）[金1]', due: at('2026-12-11T23:59:00+09:00'), url: null, needsAction: true, module: 'quiz', status: 'unknown', formURL: null }],
+    } },
+    mail: { value: { messages: [] } },
+    campus: { value: {
+      // 実際の一覧形式と同じ並び（日付・時限・時間割コード・科目・区分・教室）。科目名は大学側で略されていてもコードで合う
+      cancellations: { title: '休講・補講・教室変更（今日から5週間）', header: ['日付', '時限', '時間割コード', '科目', '区分', '教室'],
+        rows: [['12月4日(金)', '1限', 'B31N04K1', '微積（略称）【担当】', '休講', 'H402講義室'], ['12月19日(土)', '1限', 'B30E01K1', '社会連携講座【担当】', '補講', '4312講義室']] },
+      portlets: [],
+    } },
+  };
+  const list = L.cancellations(S, now);
+  assert.equal(list.length, 1); // 補講は休講ではない
+  const items = L.todos(S, false, now, { thisWeek: true });
+  assert.equal(items.length, 1);
+  assert.match(items[0].reason, /12月4日が休講/);
+});

@@ -90,7 +90,14 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - 例外（早めに出ている課題）：締切が先でも、もう提出できる（notSubmitted / form）か、Campus Square の休講（休講ページの表・ポータルの「休講」を含む行）に
     今日〜締切の間のその科目の休講があれば出す。理由欄に「○月○日が休講なので早めに出ている課題です」などと出る。
   - 隠した件数は「あと8日以上先・受付開始前の課題 N件は…」として出し、押すと Moodle 画面へ。
-  - 実データ：17件 → 3件（隠した14件はすべて受付開始前）。休講の例外は実データに休講がなかったため、テストでのみ確認。
+  - 実データ：17件 → 3件（隠した14件はすべて受付開始前）。
+  - **休講の読み取りを修正（0.3.5）**：休講補講参照ページの初期表示はコマ形式（1週間分のマス目・入れ子の表）で、従来の largestTable では
+    表示設定のフォームしか読めていなかった（常に0行）。`scripts.js` の `campusCancellations` で、ページのフォームを
+    「一覧形式・変更情報のみ・履修中のみ・今日から5週間」で送って `table.normal` を読む（行の class：kyuko-kyuko=休講 / kyuko-hoko=補講 / kyuko-kyoshitsu=教室変更）。
+    列は 日付・時限・時間割コード・科目・区分・教室。休講補講参照以外のページが設定されていれば従来の largestTable。
+    実データで「12月19日(土) 1限 社会連携講座 補講」を読めた（全科目・10月〜1月では約100件、休講・補講の両方の class を確認）。
+    締切の科目との照合は科目名に加えて時間割コード（Moodle 短縮名 …-B31N04K101 → B31N04K1）でも行う。
+    Mac 版も同じ（`Web/Scripts.swift` の `campusCancellations` は Windows 版と同一の文字列であることを確認済み、`AppStore.fetchCampus`・`ThisWeek.courseCode`）。
 - Mac 版に同じ変更を入れた：
   - `Models/Domain.swift`：`enum ThisWeek`（isLater・guessDate・cancellations・cancelledBefore）→ **swiftc でコンパイル・実行し Windows 版と同じ結果を確認済み**
   - `Store/AppStore.swift`：`todos(…, thisWeek:)`（**未ビルド**）

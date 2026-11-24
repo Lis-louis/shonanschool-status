@@ -25,7 +25,7 @@ enum DefaultConfig {
             login: "https://portal.shonan-it.ac.jp/campusweb/",
             portal: "https://portal.shonan-it.ac.jp/campusweb/portal.do?page=main",
             timetable: "https://portal.shonan-it.ac.jp/campusweb/campussquare.do?_flowId=RSW0001000-flow",     // 推定: 履修登録・登録状況照会
-            cancellations: "https://portal.shonan-it.ac.jp/campusweb/campussquare.do?_flowId=KHW0001100-flow", // 推定: 休講・補講
+            cancellations: "https://portal.shonan-it.ac.jp/campusweb/campussquare.do?_flowId=KHW0001100-flow", // 休講補講参照（2026-11-24 確認）
             grades: "https://portal.shonan-it.ac.jp/campusweb/campussquare.do?_flowId=SIW0001300-flow",        // 推定: 成績照会
             syllabus: "https://portal.shonan-it.ac.jp/campusweb/campussquare.do?_flowId=SYW0001000-flow",      // 推定: シラバス
             attendance: "https://syusseki.shonan-it.ac.jp/campusaa/"                                            // ログインページ上のリンクより

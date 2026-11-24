@@ -460,8 +460,16 @@ class AppStore {
         try {
           await s.load(cURL);
           await sleep(1000);
-          cancellations = await s.runJSON(Scripts.largestTable);
-          log(`休講ページ ${s.where}: ${cancellations?.rows?.length ?? 0}行`, true);
+          cancellations = await s.runJSON(Scripts.campusCancellations);
+          if (cancellations) {
+            const kinds = {};
+            for (const r of cancellations.rows) kinds[r[4]] = (kinds[r[4]] ?? 0) + 1;
+            log(`休講・補講（一覧・今日から5週間）: ${cancellations.rows.length}件` + Object.entries(kinds).map(([k, n]) => ` ${k}×${n}`).join(''), true);
+          } else {
+            // 休講補講参照以外のページが設定されているときは、いちばん大きい表を読む
+            cancellations = await s.runJSON(Scripts.largestTable);
+            log(`休講ページ ${s.where}: ${cancellations?.rows?.length ?? 0}行`, true);
+          }
         } catch (e) { warnings.push('休講情報: ' + e.message); log(`休講: ${e.message}`, false); }
       }
       return loaded({ timetable, portlets, cancellations, warnings });

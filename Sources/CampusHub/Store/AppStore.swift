@@ -237,7 +237,9 @@ final class AppStore {
             if thisWeek {
                 if d.status == .notOpenYet { continue }
                 if ThisWeek.isLater(d.due, now: now) {
-                    if let course = d.course, let c = ThisWeek.cancelledBefore(course: course, due: d.due, in: cancels, now: now) {
+                    if let course = d.course,
+                       let c = ThisWeek.cancelledBefore(course: course, due: d.due, in: cancels, now: now,
+                                                        code: ThisWeek.courseCode(moodle.value?.courses.first { $0.fullName == course }?.shortName)) {
                         let md = c.date.formatted(.dateTime.month(.defaultDigits).day().locale(Locale(identifier: "ja_JP")))
                         early = "締切は先ですが、\(md)が休講なので早めに出ている課題です"
                     } else if d.status == .notSubmitted || d.status == .form {
@@ -512,8 +514,15 @@ final class AppStore {
                 do {
                     try await s.load(url)
                     try await Task.sleep(for: .seconds(1))
-                    cancellations = try await s.runJSON(Scripts.largestTable, as: ExtractedTable.self)
-                    log("休講ページ \(s.where_): \(cancellations?.rows.count ?? 0)行", true)
+                    if let list = try await s.runJSON(Scripts.campusCancellations, as: ExtractedTable.self) {
+                        cancellations = list
+                        let kinds = Dictionary(grouping: list.rows, by: { $0.count > 4 ? $0[4] : "" }).map { " \($0.key)×\($0.value.count)" }.sorted().joined()
+                        log("休講・補講（一覧・今日から5週間）: \(list.rows.count)件" + kinds, true)
+                    } else {
+                        // 休講補講参照以外のページが設定されているときは、いちばん大きい表を読む
+                        cancellations = try await s.runJSON(Scripts.largestTable, as: ExtractedTable.self)
+                        log("休講ページ \(s.where_): \(cancellations?.rows.count ?? 0)行", true)
+                    }
                 } catch { warnings.append("休講情報: " + error.localizedDescription); log("休講: \(error.localizedDescription)", false) }
             }
             return .loaded(CampusSnapshot(timetable: timetable, portlets: portlets, cancellations: cancellations, warnings: warnings))

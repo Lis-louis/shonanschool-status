@@ -232,7 +232,7 @@ scripts/                  .app / .pkg / Windows 版 .exe のビルドスクリ�
 | Moodle | `https://moodle2026.shonan-it.ac.jp` | 確認済み（ログインフォームも確認） |
 | Campus Square | `https://portal.shonan-it.ac.jp/campusweb/` | 確認済み（ログインフォームも確認） |
 | 時間割 | `campussquare.do?_flowId=RSW0001000-flow` | 確認済み（ポータルのメニュー「履修登録・登録状況照会」） |
-| 休講・補講 | `_flowId=KHW0001100-flow` | **推定** |
+| 休講・補講 | `_flowId=KHW0001100-flow` | 確認済み（ページ名「休講補講参照」。一覧形式・今日から5週間で読み取る） |
 | 成績 / シラバス | `SIW0001300-flow` / `SYW0001000-flow` | **推定** |
 | 出席管理 | `https://syusseki.shonan-it.ac.jp/campusaa/` | ログインページのリンクより |
 | 大学メール | Google Workspace（Gmail） | DNS（MX レコード）で確認 |
@@ -241,7 +241,7 @@ scripts/                  .app / .pkg / Windows 版 .exe のビルドスクリ�
 
 ### 既知の制限
 
-- 休講・補講、成績、シラバスのページ URL は推定のため、大学側の画面と違うことがある（上記の方法で直せる）
+- 成績、シラバスのページ URL は推定のため、大学側の画面と違うことがある（上記の方法で直せる）
 - Windows 版の締切の通知は、アプリを起動している間だけ Windows の通知センターに出る
 - 大学がサイトの作りを変えると、読み取りがうまくいかなくなることがある（**設定 → 接続の診断** で確認）
 

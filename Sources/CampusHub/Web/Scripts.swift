@@ -190,6 +190,47 @@ enum Scripts {
     return null;
     """
 
+    /// 休講補講参照のページで「一覧形式・変更情報のみ・履修中の科目のみ・今日から5週間」を表示させて読み取る。
+    /// コマ形式（初期表示）は1週間分のマス目で、表が入れ子のため largestTable では読めない。
+    /// 行の class が kyuko-kyuko（休講）/ kyuko-hoko（補講）/ kyuko-kyoshitsu（教室変更）。
+    /// 休講補講参照のページでなければ null（呼ぶ側で largestTable に切り替える）
+    static let campusCancellations = #"""
+    const clean = s => String(s || "").replace(/\s+/g, " ").trim();
+    const f = Array.from(document.forms).find(f => f.querySelector("[name=dispType]"));
+    if (!f) return null;
+    const body = new URLSearchParams();
+    const key = f.querySelector("[name=_flowExecutionKey]");
+    if (key) body.set("_flowExecutionKey", key.value);
+    body.set("_eventId", "search");
+    body.set("_eventId_search", " 表 示 す る");
+    body.set("dispType", "list");
+    body.set("dispData", "chg");
+    const ymd = d => [d.getFullYear(), d.getMonth() + 1, d.getDate()];
+    const put = (name, d) => {
+      const [y, m, day] = ymd(d);
+      body.set(name, y + "/" + m + "/" + day);
+      body.set(name + "_year", y); body.set(name + "_month", m); body.set(name + "_day", day);
+    };
+    put("startDay", new Date());
+    put("endDay", new Date(Date.now() + 35 * 86400000));
+    body.set("rishuchuFlg", "true");
+    body.set("_rishuchuFlg", "1");
+    body.set("kyokanCode", ""); body.set("campusCode", ""); body.set("shozokuCode", "");
+    const r = await fetch(f.action, { method: "POST", body, credentials: "same-origin" });
+    const doc = new DOMParser().parseFromString(await r.text(), "text/html");
+    const tb = doc.querySelector("table.normal");
+    if (!tb) return null;
+    const KIND = { "kyuko-kyuko": "休講", "kyuko-hoko": "補講", "kyuko-kyoshitsu": "教室変更" };
+    const rows = [];
+    for (const tr of Array.from(tb.rows).slice(1)) {
+      const c = Array.from(tr.cells).map(td => clean(td.textContent));
+      if (c.length < 4) continue;
+      const k = Object.keys(KIND).find(k => tr.classList.contains(k) || tr.querySelector("." + k));
+      rows.push([c[0], c[1], c[2], c[3], k ? KIND[k] : "変更", c.length > 6 ? c[c.length - 1] : ""]);
+    }
+    return JSON.stringify({ title: "休講・補講・教室変更（今日から5週間）", header: ["日付", "時限", "時間割コード", "科目", "区分", "教室"], rows });
+    """#
+
     /// ページ内でいちばん大きい表を読み取る（休講一覧など）
     static let largestTable = textHelper + """
     const clean = el => txt(el).replace(/\\s+/g, " ").trim();
