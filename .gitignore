@@ -71,6 +71,7 @@ RFMT/
 
 # Windows 版のインストーラーは GitHub Releases で配る（リポジトリには入れない）
 /CampusHub-Setup-*.exe
+/CampusHub-*.pkg
 
 # 作業中に貼ったスクリーンショット（コミットしない）
 スクリーンショット*.png

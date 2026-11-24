@@ -315,3 +315,44 @@ import Testing
         #expect(!GmailClient.hasReceipt(for: d, in: [("「第9回 出席確認」の回答のコピー", due)]))
     }
 }
+
+@Suite struct UpdateCheckTests {
+    private let hash = String(repeating: "ab", count: 32)
+
+    private func release(_ tag: String, pkg: Bool = true, digest: String? = nil, draft: Bool = false, pre: Bool = false) -> UpdateCheck.Release {
+        let v = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        var assets = [UpdateCheck.Asset(name: "CampusHub-Setup-\(v).exe", size: 100, digest: "sha256:" + hash,
+                                        browser_download_url: URL(string: "https://github.com/x/y/releases/download/\(tag)/CampusHub-Setup-\(v).exe")!)]
+        if pkg {
+            assets.append(UpdateCheck.Asset(name: "CampusHub-\(v).pkg", size: 100, digest: digest ?? "sha256:" + hash,
+                                            browser_download_url: URL(string: "https://github.com/x/y/releases/download/\(tag)/CampusHub-\(v).pkg")!))
+        }
+        return UpdateCheck.Release(tag_name: tag, draft: draft, prerelease: pre, assets: assets)
+    }
+
+    @Test func comparesVersionsNumerically() {
+        #expect(UpdateCheck.isNewer("0.3.10", than: "0.3.9"))
+        #expect(UpdateCheck.isNewer("1.0", than: "0.9.9"))
+        #expect(!UpdateCheck.isNewer("0.3.6", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.3.6.0", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.3.5", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.4.0-beta", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.4.0", than: "開発版"))
+    }
+
+    @Test func picksNewestReleaseThatHasAMacInstaller() {
+        let rs = [release("v0.3.8", pkg: false), release("v0.3.7"), release("v0.3.6")]
+        let c = UpdateCheck.pick(rs, current: "0.3.6")
+        #expect(c?.version == "0.3.7")
+        #expect(c?.url.lastPathComponent == "CampusHub-0.3.7.pkg")
+        #expect(c?.sha256 == hash)
+        #expect(UpdateCheck.pick(rs, current: "0.3.7") == nil)
+    }
+
+    @Test func skipsDraftsPrereleasesAndAssetsWithoutDigest() {
+        #expect(UpdateCheck.pick([release("v0.4.0", draft: true)], current: "0.3.6") == nil)
+        #expect(UpdateCheck.pick([release("v0.4.0", pre: true)], current: "0.3.6") == nil)
+        #expect(UpdateCheck.pick([release("v0.4.0", digest: "md5:abc")], current: "0.3.6") == nil)
+        #expect(UpdateCheck.pick([release("v0.4.0", digest: "sha256:xyz")], current: "0.3.6") == nil)
+    }
+}

@@ -33,15 +33,17 @@
 | OS | ファイル | 手順 |
 |---|---|---|
 | Windows | [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) の `CampusHub-Setup-<バージョン>.exe` | 実行してセットアップの案内に従う（インストール先 → インストール）。自分のユーザー用にインストールするので管理者権限は不要。デスクトップとスタートメニューにショートカットができます |
-| macOS | `CampusHub-0.2.0.pkg` | **準備中**（Mac で `./scripts/build-pkg.sh` を実行すると作れます）。開くと「アプリケーション」に キャンパスハブ.app が入ります |
+| macOS | [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) の `CampusHub-<バージョン>.pkg` | 開いてインストーラーの案内に従う（続ける → インストール。Mac のパスワードを聞かれます）。「アプリケーション」に キャンパスハブ.app が入り、終わると自動で開きます。Apple シリコン・Intel の両方で動きます |
 
 アンインストール：Windows は **設定 → アプリ → インストールされているアプリ → キャンパスハブ → アンインストール**。macOS は「アプリケーション」の キャンパスハブ をゴミ箱へ。
 
 > インストーラーはまだコード署名していないため、初回に OS の警告が出ることがあります。
 > Windows：SmartScreen が出たときは **詳細情報 → 実行** をクリック。
-> macOS：開けないときは「右クリック → 開く」か、**システム設定 → プライバシーとセキュリティ** で「このまま開く」をクリック。
+> macOS：「開けません」と出たときは、**システム設定 → プライバシーとセキュリティ** の下のほうにある「このまま開く」をクリックしてから、もう一度 .pkg を開いてください（macOS 14 では「右クリック → 開く」でも開けます）。インストールしたアプリはそのまま起動できます。
 
-### アップデート（Windows 版）
+### アップデート
+
+#### Windows 版
 
 Windows 版（0.3.0 以降）は自動でアップデートします。
 
@@ -52,7 +54,19 @@ Windows 版（0.3.0 以降）は自動でアップデートします。
 **設定 → アプリ → アップデートを確認**（またはメニューの **ファイル → アプリのアップデートを確認**）で、すぐに確認することもできます。
 
 > 0.2.0 以前には自動アップデートがないため、一度だけ Releases から最新のインストーラーを入れ直してください（設定・ログイン情報はそのまま引き継がれます）。
-> Mac 版の自動アップデートは準備中です。
+
+#### Mac 版
+
+Mac 版（0.3.6 以降）も、新しいバージョンを自動で見つけてダウンロードします。
+
+1. 起動したとき（とその後 3 時間ごと）に、[Releases](https://github.com/Lis-louis/shonanschool-status/releases) に新しいバージョンの `.pkg` がないか確認します
+2. あれば裏でダウンロードし（GitHub に載っている SHA-256 と一致するか確かめます）、画面の上に「**新しいバージョン x.y.z の準備ができました［更新する］**」が出ます
+3. **更新する** を押すとインストーラーが開き、キャンパスハブは一度閉じます。案内に沿ってインストールすると（Mac のパスワードを聞かれます）、終わったときに新しいバージョンで開き直します
+
+**設定 → アプリ → アップデートを確認**（またはメニューの **キャンパスハブ → アップデートを確認…**）で、すぐに確認することもできます。
+
+> Windows 版と違い、終了するときに黙って入れ替えることはしません（「アプリケーション」フォルダへの書き込みに Mac のパスワードが必要なため）。
+> 0.3.5 以前（自分でビルドしたもの）には自動アップデートがないため、一度だけ Releases から `.pkg` を入れてください（設定・ログイン情報はそのまま引き継がれます）。
 
 ## 動作環境
 
@@ -75,14 +89,14 @@ Windows 版（0.3.0 以降）は自動でアップデートします。
 | Moodle | **まとめ**：課題・締切、通知（提出済みの課題の通知は折りたたむ）、コース（進捗つき。もう受けていないコースは「非表示」で外せて、「非表示にしたコース」から戻せる）。**ブラウザ**：公式サイトをアプリ内で表示 |
 | Campus Square | **まとめ**：曜日別の時間割（押すと対応する Moodle のコースを開く。見つからないときは Moodle で科目名を検索）、休講・補講の表、ポータルの各お知らせ。**ブラウザ**：公式サイト |
 | メール | Gmail を読み取り専用で取得し、内容ごとに自動で仕分け |
-| 設定 | ログイン情報、Gmail 連携、自動ログイン、URL、表示項目、通知、サンプル表示、アプリのバージョンとアップデート確認（Windows）、**接続の診断** |
+| 設定 | ログイン情報、Gmail 連携、自動ログイン、URL、表示項目、通知、サンプル表示、アプリのバージョンとアップデート確認、**接続の診断** |
 
 ### ショートカット
 
 | 操作 | 内容 |
 |---|---|
 | Ctrl+R（Windows）／⌘R（Mac） | 更新 |
-| Ctrl+1〜6（Windows） | ホーム・カレンダー・Moodle・Campus Square・メール・設定 に切り替え |
+| Ctrl+1〜6（Windows）／⌘1〜6（Mac） | ホーム・カレンダー・Moodle・Campus Square・メール・設定 に切り替え |
 | `CampusHub.exe --section calendar`（Windows）<br>`open -a キャンパスハブ --args --section calendar`（Mac） | 指定の画面で開く（`home` / `calendar` / `moodle` / `campusSquare` / `mail` / `settings`） |
 
 ## しくみ
@@ -102,7 +116,7 @@ Windows 版（0.3.0 以降）は自動でアップデートします。
 - 自動でボタンを押すのは 30 秒に 1 回まで（失敗を繰り返してアカウントがロックされないように）。
 - 読み取った内容はメモリ上だけで、ファイルに保存しません。Cookie はこのアプリ専用の保存場所に残ります（**設定 → ログイン状態を消去** で削除）。
 - 更新は手動（起動時と「更新」ボタン）だけで、大学のサーバーに負荷をかける定期取得はしません。
-- アプリのアップデート確認（Windows 版）は GitHub（github.com）にだけ接続し、送るのはふつうのダウンロードと同じ情報だけです（ID・パスワードや読み取った内容は送りません）。
+- アプリのアップデート確認は GitHub（github.com・api.github.com と、そのダウンロード用のホスト）にだけ接続し、送るのはふつうのダウンロードと同じ情報だけです（ID・パスワードや読み取った内容は送りません）。
 
 > 自動ログインや画面の読み取りが大学の利用規約・情報ポリシーで認められているかは、各自で確認してください。
 
@@ -135,7 +149,7 @@ npm start            & rem インストールせずに起動
 npm run dist:win     & rem インストーラーを作成
 ```
 
-`npm run dist:win` で `dist\windows\CampusHub-Setup-<バージョン>.exe` ができます（自分の PC で試す用。配布は下の「[新しいバージョンの配り方](#新しいバージョンの配り方windows-版)」で自動で行います）。
+`npm run dist:win` で `dist\windows\CampusHub-Setup-<バージョン>.exe` ができます（自分の PC で試す用。配布は下の「[新しいバージョンの配り方](#新しいバージョンの配り方windows-版mac-版)」で自動で行います）。
 
 ### macOS
 
@@ -153,28 +167,36 @@ swift test                         # 単体テスト
 | インストーラー | コマンド | できるもの |
 |---|---|---|
 | Windows `.exe` | `cd windows && npm run dist:win`（Windows で）<br>`./scripts/build-windows.sh`（Mac で） | `dist/windows/CampusHub-Setup-<バージョン>.exe` |
-| macOS `.pkg` | `./scripts/build-pkg.sh`（Mac で） | `CampusHub-<バージョン>.pkg`（リポジトリ直下。/Applications/キャンパスハブ.app に入る） |
+| macOS `.pkg` | `./scripts/build-pkg.sh`（Mac で） | `dist/CampusHub-<バージョン>.pkg`（/Applications/キャンパスハブ.app に入る。Apple シリコン・Intel 両対応） |
 
 - Mac の `.pkg` は Windows では作れません。Windows の `.exe` は Mac 上でも作れます（`./scripts/build-windows.sh --run` で画面の確認、`--test` でテストだけ）。
 
-### 新しいバージョンの配り方（Windows 版）
+### 新しいバージョンの配り方（Windows 版・Mac 版）
+
+バージョンは Windows 版と Mac 版で共通です（`windows/package.json` の `"version"`。Mac 版の `scripts/build-app.sh`・`build-pkg.sh` もここから読みます）。
 
 1. 直したいところを直す
-2. `windows/package.json` の `"version"` を上げる（例：`0.3.0` → `0.3.1`）
+2. `windows/package.json` の `"version"` を上げる（例：`0.3.6` → `0.3.7`）
 3. main に push する
 
-あとは GitHub Actions（`.github/workflows/release-windows.yml`）が、テスト → インストーラーのビルド → [Releases](https://github.com/Lis-louis/shonanschool-status/releases) への公開（タグ `v<バージョン>`）まで自動で行います。
-公開されると、インストール済みのアプリに「再起動して更新」が出ます。
+あとは GitHub Actions が、テスト → インストーラーのビルド → [Releases](https://github.com/Lis-louis/shonanschool-status/releases) への公開（タグ `v<バージョン>`）まで自動で行います。Windows 版と Mac 版は同じ Release に入ります。
 
-- `version` を上げずに push したときは何もしません（同じバージョンの Release がすでにあるため）。
-- 進み具合は GitHub の **Actions** タブで見られます。手動で動かすときは Actions → 「Windows 版をリリース」→ **Run workflow**。
-- Release に上がるのは `CampusHub-Setup-<バージョン>.exe`・`.exe.blockmap`・`latest.yml` の 3 つです。アプリは `latest.yml` を見て新しいバージョンに気づくので、消さないでください。
+| | ワークフロー | Release に上がるもの |
+|---|---|---|
+| Windows 版 | `.github/workflows/release-windows.yml`（Windows で動く） | `CampusHub-Setup-<バージョン>.exe`・`.exe.blockmap`・`latest.yml` |
+| Mac 版 | `.github/workflows/release-mac.yml`（macOS で動く） | `CampusHub-<バージョン>.pkg` |
+
+公開されると、インストール済みのアプリに「再起動して更新」（Windows）／「更新する」（Mac）が出ます。
+
+- `version` を上げずに push したときは何もしません（同じバージョンの Release にファイルがそろっているため）。
+- 進み具合は GitHub の **Actions** タブで見られます。手動で動かすときは Actions → 「Windows 版をリリース」／「Mac 版をリリース」→ **Run workflow**。途中で失敗したときも、これで足りないファイルを上げ直せます。
+- Windows 版は `latest.yml`、Mac 版は `CampusHub-<バージョン>.pkg`（と GitHub が付ける SHA-256）を見て新しいバージョンに気づくので、消さないでください。
 
 ## うまく読み込めないとき
 
 **設定 → 接続の診断** か、次の診断ログに、どこで止まったか（開いたページのホスト名・パス、件数、エラー）が出ます。ID・パスワード・メールや授業の内容は書きません。
 
-- Mac：`~/Library/Logs/CampusHub/diagnostics.log`
+- Mac：`~/Library/Logs/CampusHub/diagnostics.log`（メニューの **表示 → 診断ログのフォルダを開く**）
 - Windows：`%APPDATA%\キャンパスハブ\logs\diagnostics.log`（メニューの **ファイル → 診断ログのフォルダを開く**）
 
 ## 設定する場所
@@ -211,19 +233,19 @@ windows/                  Windows 版（Electron）
 icon/                     アプリアイコンの元画像（SVG）
 packaging/                Mac 用のアイコン（.icns・PNG）
 scripts/                  .app / .pkg / Windows 版 .exe のビルドスクリプト
-.github/workflows/        Windows 版を Releases に公開する GitHub Actions
+.github/workflows/        Windows 版・Mac 版を Releases に公開する GitHub Actions
 ```
 
 ## 開発状況
 
 | 項目 | 状態 |
 |---|---|
-| Mac 版（SwiftUI） | 完成 |
+| Mac 版（SwiftUI） | 完成（インストーラー・自動アップデートあり） |
 | Windows 版（Electron） | 完成（インストーラー・自動アップデートあり） |
 | Moodle・Campus Square の自動ログインと読み取り | 完成 |
 | Gmail の連携と自動仕分け | 完成 |
-| Mac 版インストーラー（.pkg）の配布 | 準備中 |
-| Mac 版の自動アップデート | 準備中 |
+| Mac 版インストーラー（.pkg）の配布 | 完成（Releases。Apple シリコン・Intel 両対応） |
+| Mac 版の自動アップデート | 完成（0.3.6 以降。インストーラーを開いて更新） |
 
 ### 未確定・推定の値
 

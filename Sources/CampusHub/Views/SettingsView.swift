@@ -74,6 +74,19 @@ struct SettingsView: View {
                 Toggle("サンプルデータで表示を確認する", isOn: $store.prefs.useSampleData)
             }
 
+            Card(title: "アプリ", symbol: "sparkles") {
+                HStack {
+                    Text("バージョン \(AppUpdater.currentVersion)").frame(maxWidth: .infinity, alignment: .leading)
+                    Button { Task { await store.updater.check(manual: true) } } label: {
+                        Label("アップデートを確認", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(SoftButtonStyle())
+                    .disabled(store.updater.state == .checking)
+                }
+                Text("新しいバージョンが出ると自動でダウンロードし、画面の上に「更新する」が出ます。押すとインストーラーが開くので、案内に沿ってインストールしてください（Macのパスワードを聞かれます）。設定とログイン情報はそのまま引き継がれます。")
+                    .font(.caption).foregroundStyle(p.subtle)
+            }
+
             DiagnosticsCard()
         }
         .toggleStyle(.switch)

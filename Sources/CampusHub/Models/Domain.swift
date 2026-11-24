@@ -7,6 +7,7 @@ enum LoadState<Value: Sendable>: Sendable {
     case failed(String)
 
     var value: Value? { if case .loaded(let v) = self { v } else { nil } }
+    var isLoading: Bool { if case .loading = self { true } else { false } }
 }
 
 // MARK: - Moodle

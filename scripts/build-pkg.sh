@@ -9,13 +9,14 @@ cd "${0:A:h}/.."
 
 NAME="キャンパスハブ"
 BUNDLE_ID="${BUNDLE_ID:-local.campushub.app}"
-VERSION="${VERSION:-0.2.0}"
+VERSION="${VERSION:-$(sed -n 's/^ *"version": *"\([0-9.]*\)".*/\1/p' windows/package.json | head -1)}"
+[[ -n "$VERSION" ]] || { echo "windows/package.json から版を読めませんでした" >&2; exit 1; }
 APP="build/${NAME}.app"
-OUT="CampusHub-${VERSION}.pkg"
+OUT="dist/CampusHub-${VERSION}.pkg"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-./scripts/build-app.sh
+APP_VERSION="$VERSION" ./scripts/build-app.sh
 
 # pkgbuild は .app を丸ごと入れる「コンポーネント」として扱う。
 # 再配置（別の場所にある古い .app を上書き）は混乱のもとなので無効にする。
@@ -24,8 +25,21 @@ ditto "$APP" "$TMP/root/Applications/${NAME}.app"
 pkgbuild --analyze --root "$TMP/root" "$TMP/components.plist"
 /usr/libexec/PlistBuddy -c "Add :0:BundleIsRelocatable bool false" "$TMP/components.plist"
 
+# インストールが終わったら、画面からインストールした人のアプリを開く（自動更新の「更新する」のあとも開き直す）
+mkdir -p "$TMP/scripts"
+cat > "$TMP/scripts/postinstall" <<'SH'
+#!/bin/sh
+[ -n "$COMMAND_LINE_INSTALL" ] && exit 0
+user=$(stat -f %Su /dev/console)
+[ -z "$user" ] || [ "$user" = root ] && exit 0
+launchctl asuser "$(id -u "$user")" sudo -u "$user" open "/Applications/キャンパスハブ.app" >/dev/null 2>&1 || true
+exit 0
+SH
+chmod 755 "$TMP/scripts/postinstall"
+
 pkgbuild --root "$TMP/root" \
   --component-plist "$TMP/components.plist" \
+  --scripts "$TMP/scripts" \
   --identifier "${BUNDLE_ID}.pkg" \
   --version "$VERSION" \
   --install-location / \
@@ -55,6 +69,7 @@ cat > "$TMP/resources/welcome.html" <<HTML
 </body>
 HTML
 
+mkdir -p dist
 productbuild --distribution "$TMP/distribution.xml" \
   --package-path "$TMP" \
   --resources "$TMP/resources" \

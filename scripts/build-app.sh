@@ -8,11 +8,17 @@ cd "${0:A:h}/.."
 # 仮のバンドルID。キーチェーン・通知・設定はこのIDに紐づくので、決めたら変えないこと。
 BUNDLE_ID="${BUNDLE_ID:-local.campushub.app}"
 NAME="キャンパスハブ"
+# アプリの版は Windows 版と共通（windows/package.json の "version"）。Release のタグ v<版> と自動更新の比較に使う。
+APP_VERSION="${APP_VERSION:-$(sed -n 's/^ *"version": *"\([0-9.]*\)".*/\1/p' windows/package.json | head -1)}"
+[[ -n "$APP_VERSION" ]] || { echo "windows/package.json から版を読めませんでした" >&2; exit 1; }
 VERSION="$(date +%Y%m%d.%H%M%S)"   # ビルドごとに変える（ドックのアイコンキャッシュ対策）
 APP="build/${NAME}.app"
 
-swift build -c release
-BIN_DIR="$(swift build -c release --show-bin-path)"
+# Apple シリコンと Intel の両方で動くようにする（ARCHS="arm64" などで変えられる）
+ARCH_FLAGS=()
+for a in ${=ARCHS:-arm64 x86_64}; do ARCH_FLAGS+=(--arch "$a"); done
+swift build -c release "${ARCH_FLAGS[@]}"
+BIN_DIR="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)"
 
 [[ -f packaging/AppIcon.icns ]] || ./scripts/make-icon.sh
 
@@ -35,7 +41,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>CampusHub</string>
   <key>CFBundleIconFile</key><string>${ICON_NAME}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.0</string>
+  <key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
   <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>CFBundleDevelopmentRegion</key><string>ja</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
@@ -44,7 +50,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 codesign --force --deep --sign - "$APP"
-echo "作成しました: $APP"
+echo "作成しました: $APP（版 ${APP_VERSION}・$(lipo -archs "$APP/Contents/MacOS/CampusHub")）"
 
 if [[ "${1:-}" == "--install" ]]; then
   DEST="/Applications/${NAME}.app"

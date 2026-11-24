@@ -34,15 +34,17 @@ Download the installer for your OS from [Releases (latest)](https://github.com/L
 | OS | File | Steps |
 |---|---|---|
 | Windows | `CampusHub-Setup-<version>.exe` from [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) | Run it and follow the setup (install location → Install). Installs for the current user, no administrator rights needed. Creates desktop and Start menu shortcuts |
-| macOS | `CampusHub-0.2.0.pkg` | **Coming soon** (run `./scripts/build-pkg.sh` on a Mac to build it). Installs キャンパスハブ.app into Applications |
+| macOS | `CampusHub-<version>.pkg` from [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) | Open it and follow the installer (Continue → Install; it asks for your Mac password). Installs キャンパスハブ.app into Applications and opens it when done. Runs on both Apple silicon and Intel Macs |
 
 To uninstall: on Windows, use **Settings → Apps → Installed apps → キャンパスハブ → Uninstall**. On macOS, move キャンパスハブ from Applications to the Trash.
 
 > The installers are not code-signed yet, so the OS may warn you the first time.
 > Windows: if SmartScreen appears, click **More info → Run anyway**.
-> macOS: if it is blocked, right-click → **Open**, or go to **System Settings → Privacy & Security** and click **Open Anyway**.
+> macOS: if it says the package can't be opened, go to **System Settings → Privacy & Security**, click **Open Anyway** near the bottom, then open the .pkg again (on macOS 14 you can also right-click → **Open**). The installed app then opens normally.
 
-### Updates (Windows)
+### Updates
+
+#### Windows
 
 The Windows version (0.3.0 and later) updates itself.
 
@@ -53,7 +55,19 @@ The Windows version (0.3.0 and later) updates itself.
 To check right away, use **Settings → App → Check for updates** (or the menu **File → Check for app updates**).
 
 > Versions 0.2.0 and earlier have no automatic updates, so install the latest installer from Releases once by hand (your settings and sign-in details carry over).
-> Automatic updates for the Mac version are coming soon.
+
+#### macOS
+
+The Mac version (0.3.6 and later) also finds and downloads new versions by itself.
+
+1. At launch (and every 3 hours after that) it checks [Releases](https://github.com/Lis-louis/shonanschool-status/releases) for a newer `.pkg`
+2. If there is one, it downloads it in the background (checking that it matches the SHA-256 GitHub lists for it) and shows "**New version x.y.z is ready [Update (更新する)]**" at the top of the window
+3. Click **Update** (更新する) and the installer opens while CampusHub closes. Follow the installer (it asks for your Mac password) and the app reopens on the new version when it finishes
+
+To check right away, use **Settings → App → Check for updates** (or the menu **キャンパスハブ → アップデートを確認…**).
+
+> Unlike Windows, the Mac version never swaps itself silently when you quit, because writing to the Applications folder needs your Mac password.
+> Versions 0.3.5 and earlier (ones you built yourself) have no automatic updates, so install the `.pkg` from Releases once by hand (your settings and sign-in details carry over).
 
 ## Requirements
 
@@ -76,14 +90,14 @@ To check right away, use **Settings → App → Check for updates** (or the menu
 | Moodle | **Summary**: assignments and deadlines, notifications (those about work you have already submitted are folded away), courses (with progress; hide courses you no longer take with "Hide" and bring them back from "Hidden courses"). **Browser**: the official site inside the app |
 | Campus Square | **Summary**: timetable by weekday, cancellations / make-up classes, portal announcements. **Browser**: the official site |
 | Mail | Reads Gmail (read-only) and sorts it by content |
-| Settings | Sign-in, Gmail connection, automatic sign-in, URLs, what to show, notifications, sample data, app version and update check (Windows), **connection diagnostics** |
+| Settings | Sign-in, Gmail connection, automatic sign-in, URLs, what to show, notifications, sample data, app version and update check, **connection diagnostics** |
 
 ### Shortcuts
 
 | Action | Result |
 |---|---|
 | Ctrl+R (Windows) / ⌘R (Mac) | Refresh |
-| Ctrl+1–6 (Windows) | Switch to Home, Calendar, Moodle, Campus Square, Mail, Settings |
+| Ctrl+1–6 (Windows) / ⌘1–6 (Mac) | Switch to Home, Calendar, Moodle, Campus Square, Mail, Settings |
 | `CampusHub.exe --section calendar` (Windows)<br>`open -a キャンパスハブ --args --section calendar` (Mac) | Open on a given screen (`home` / `calendar` / `moodle` / `campusSquare` / `mail` / `settings`) |
 
 ## How it works
@@ -103,7 +117,7 @@ To check right away, use **Settings → App → Check for updates** (or the menu
 - The sign-in button is pressed automatically at most once every 30 seconds, so repeated failures can't lock your account.
 - What the app reads stays in memory and is never saved to disk. Cookies stay in the app's own storage (delete them with **Settings → Clear sign-in state**).
 - Data is refreshed only by hand (at launch and with the Refresh button). The app never polls the university's servers in the background.
-- The app update check (Windows) connects only to GitHub (github.com) and sends nothing beyond what an ordinary download does (never your ID, password, or anything the app has read).
+- The app update check connects only to GitHub (github.com, api.github.com, and GitHub's download host) and sends nothing beyond what an ordinary download does (never your ID, password, or anything the app has read).
 
 > Check for yourself whether your university's terms of use and information policies allow automatic sign-in and reading pages this way.
 
@@ -136,7 +150,7 @@ npm start            & rem launch without installing
 npm run dist:win     & rem build the installer
 ```
 
-`npm run dist:win` creates `dist\windows\CampusHub-Setup-<version>.exe` (for trying it on your own PC; releases are published automatically, see [Publishing a new version](#publishing-a-new-version-windows) below).
+`npm run dist:win` creates `dist\windows\CampusHub-Setup-<version>.exe` (for trying it on your own PC; releases are published automatically, see [Publishing a new version](#publishing-a-new-version-windows-and-macos) below).
 
 ### macOS
 
@@ -154,28 +168,36 @@ swift test                         # unit tests
 | Installer | Command | Output |
 |---|---|---|
 | Windows `.exe` | `cd windows && npm run dist:win` (on Windows)<br>`./scripts/build-windows.sh` (on a Mac) | `dist/windows/CampusHub-Setup-<version>.exe` |
-| macOS `.pkg` | `./scripts/build-pkg.sh` (on a Mac) | `CampusHub-<version>.pkg` (repository root; installs /Applications/キャンパスハブ.app) |
+| macOS `.pkg` | `./scripts/build-pkg.sh` (on a Mac) | `dist/CampusHub-<version>.pkg` (installs /Applications/キャンパスハブ.app; Apple silicon and Intel) |
 
 - The Mac `.pkg` can't be built on Windows. The Windows `.exe` can also be built on a Mac (`./scripts/build-windows.sh --run` to preview the screens, `--test` to run the tests only).
 
-### Publishing a new version (Windows)
+### Publishing a new version (Windows and macOS)
+
+Windows and Mac share one version number: `"version"` in `windows/package.json` (the Mac scripts `scripts/build-app.sh` and `build-pkg.sh` read it from there too).
 
 1. Make your changes
-2. Bump `"version"` in `windows/package.json` (e.g. `0.3.0` → `0.3.1`)
+2. Bump `"version"` in `windows/package.json` (e.g. `0.3.6` → `0.3.7`)
 3. Push to main
 
-GitHub Actions (`.github/workflows/release-windows.yml`) then runs the tests, builds the installer, and publishes it to [Releases](https://github.com/Lis-louis/shonanschool-status/releases) (tag `v<version>`).
-Once it is published, installed copies of the app show "Restart to update".
+GitHub Actions then runs the tests, builds the installers, and publishes them to [Releases](https://github.com/Lis-louis/shonanschool-status/releases) (tag `v<version>`). Both versions go into the same Release.
 
-- Pushing without bumping `version` does nothing (a Release for that version already exists).
-- Follow progress in the **Actions** tab on GitHub. To run it by hand: Actions → "Windows 版をリリース" → **Run workflow**.
-- Each Release holds three files: `CampusHub-Setup-<version>.exe`, `.exe.blockmap`, and `latest.yml`. The app finds new versions through `latest.yml`, so don't delete it.
+| | Workflow | Files added to the Release |
+|---|---|---|
+| Windows | `.github/workflows/release-windows.yml` (runs on Windows) | `CampusHub-Setup-<version>.exe`, `.exe.blockmap`, `latest.yml` |
+| macOS | `.github/workflows/release-mac.yml` (runs on macOS) | `CampusHub-<version>.pkg` |
+
+Once it is published, installed copies of the app show "Restart to update" (Windows) or "Update" (Mac).
+
+- Pushing without bumping `version` does nothing (the Release for that version already has its files).
+- Follow progress in the **Actions** tab on GitHub. To run one by hand: Actions → "Windows 版をリリース" / "Mac 版をリリース" → **Run workflow**. This also re-uploads any missing files after a failed run.
+- Windows finds new versions through `latest.yml`, and the Mac version through `CampusHub-<version>.pkg` (and the SHA-256 GitHub attaches to it), so don't delete them.
 
 ## Troubleshooting
 
 **Settings → Connection diagnostics** and the diagnostics log show where loading stopped (host and path of the opened page, item counts, errors). Your ID, password, mail, and class contents are never written there.
 
-- Mac: `~/Library/Logs/CampusHub/diagnostics.log`
+- Mac: `~/Library/Logs/CampusHub/diagnostics.log` (menu **View → Open diagnostics log folder** / **表示 → 診断ログのフォルダを開く**)
 - Windows: `%APPDATA%\キャンパスハブ\logs\diagnostics.log` (menu **File → Open diagnostics log folder**)
 
 ## Where things are configured
@@ -212,19 +234,19 @@ windows/                  Windows version (Electron)
 icon/                     app icon source (SVG)
 packaging/                Mac icons (.icns, PNG)
 scripts/                  build scripts for the .app, .pkg, and Windows .exe
-.github/workflows/        GitHub Actions that publish the Windows version to Releases
+.github/workflows/        GitHub Actions that publish the Windows and Mac versions to Releases
 ```
 
 ## Status
 
 | Item | Status |
 |---|---|
-| Mac version (SwiftUI) | Done |
+| Mac version (SwiftUI) | Done (installer and automatic updates) |
 | Windows version (Electron) | Done (installer and automatic updates) |
 | Moodle / Campus Square sign-in and reading | Done |
 | Gmail connection and sorting | Done |
-| Distributing the Mac installer (.pkg) | Coming soon |
-| Automatic updates for the Mac version | Coming soon |
+| Distributing the Mac installer (.pkg) | Done (Releases; Apple silicon and Intel) |
+| Automatic updates for the Mac version | Done (0.3.6 and later; opens the installer to update) |
 
 ### Unconfirmed and estimated values
 

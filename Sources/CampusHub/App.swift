@@ -17,6 +17,16 @@ struct CampusHubApp: App {
         .commands {
             CommandGroup(after: .toolbar) {
                 Button("更新") { Task { await store.refresh() } }.keyboardShortcut("r")
+                Divider()
+                // Windows 版と同じ ⌘1〜6 で画面を切り替える
+                ForEach(Array(AppSection.allCases.enumerated()), id: \.element) { i, s in
+                    Button(s.title) { store.selection = s }.keyboardShortcut(KeyEquivalent(Character("\(i + 1)")))
+                }
+                Divider()
+                Button("診断ログのフォルダを開く") { NSWorkspace.shared.activateFileViewerSelecting([DiagFile.url]) }
+            }
+            CommandGroup(after: .appInfo) {
+                Button("アップデートを確認…") { Task { await store.updater.check(manual: true) } }
             }
         }
     }
@@ -55,6 +65,9 @@ struct RootView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if store.updater.showsBanner { UpdateBanner().padding(.horizontal, 16).padding(.top, 30) }
+                    }
                     if let t = store.toast { Toast(text: t) { store.toast = nil } }
                 }
             }
@@ -69,8 +82,43 @@ struct RootView: View {
             if let i = args.firstIndex(of: "--section"), i + 1 < args.count, let s = AppSection(rawValue: args[i + 1]) {
                 store.selection = s
             }
+            store.updater.start()
             await store.refresh()
         }
+    }
+}
+
+/// 画面の上に出す「新しいバージョン」の知らせ（Windows 版の updateBanner と同じ）
+struct UpdateBanner: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.palette) private var p
+
+    var body: some View {
+        let u = store.updater
+        HStack(spacing: 10) {
+            switch u.state {
+            case .downloading(let v, let percent):
+                ProgressView().controlSize(.small)
+                Text("新しいバージョン \(v) をダウンロード中…（\(percent)%）").frame(maxWidth: .infinity, alignment: .leading)
+                Button { u.hiddenVersion = v } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).foregroundStyle(p.subtle).help("閉じる")
+            case .ready(let v, _):
+                Image(systemName: "sparkles").foregroundStyle(p.accent)
+                Text("新しいバージョン \(v) の準備ができました。「更新する」を押すとインストーラーが開きます（キャンパスハブは一度閉じます）")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button { u.install() } label: { Label("更新する", systemImage: "arrow.triangle.2.circlepath") }
+                    .buttonStyle(PrimaryButtonStyle())
+                Button("あとで") { u.hiddenVersion = v }.buttonStyle(SoftButtonStyle())
+            default:
+                EmptyView()
+            }
+        }
+        .font(.system(.callout, design: .rounded))
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(p.card))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(p.line))
+        .shadow(color: p.accent.opacity(0.12), radius: 10, y: 4)
+        .frame(maxWidth: 632)
     }
 }
 
