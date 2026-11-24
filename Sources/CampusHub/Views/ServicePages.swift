@@ -169,7 +169,7 @@ struct CampusSummary: View {
                         if list.isEmpty {
                             StatusMessage(kind: .info, message: "\(day)曜日の授業はありません。")
                         } else {
-                            ForEach(Array(list.enumerated()), id: \.offset) { _, c in ClassCell(period: c.period, text: c.text) }
+                            ForEach(Array(list.enumerated()), id: \.offset) { _, c in ClassCell(period: c.period, text: c.text, day: day) }
                         }
                     } else {
                         StatusMessage(kind: .info, message: "時間割の表を見つけられませんでした。「ブラウザ」で時間割のページを開き、右上の「…」から「このページを時間割に設定」を選んでください。")

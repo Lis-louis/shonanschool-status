@@ -178,16 +178,32 @@ func remainingText(_ date: Date, now: Date = .now) -> String {
     return "あと\(Int(s / 86400))日"
 }
 
-/// 時間割の1コマ（1行目＝科目名、2行目以降＝担当・教室など）
+/// 時間割の1コマ（1行目＝科目名、2行目以降＝担当・教室など）。
+/// day を渡すと対応する Moodle のコースを探し、見つかれば押すとそのコースをアプリ内で開く
 struct ClassCell: View {
+    @Environment(AppStore.self) private var store
     @Environment(\.palette) private var p
     var period: String
     var text: String
+    var day: String? = nil
 
     var body: some View {
+        let course = day.flatMap { d in
+            Timetable.moodleCourse(in: store.moodle.value?.courses ?? [], text: text, day: d, period: period)
+        }
+        if let course {
+            Button { store.openInApp(course.url, service: .moodle) } label: { cell(linked: true) }
+                .buttonStyle(.plain)
+                .help("Moodleの「\(course.fullName)」を開く")
+        } else {
+            cell(linked: false)
+        }
+    }
+
+    private func cell(linked: Bool) -> some View {
         let parts = Timetable.split(text)
         let important = Importance.isImportant(text)
-        HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .top, spacing: 12) {
             Text(period).font(.system(.callout, design: .rounded).weight(.bold)).foregroundStyle(p.accent)
                 .frame(width: 44, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
@@ -202,9 +218,16 @@ struct ClassCell: View {
                 if let code = parts.code { Text(code).font(.caption2.monospaced()).foregroundStyle(p.subtle.opacity(0.7)) }
             }
             Spacer(minLength: 0)
+            if linked {
+                Label("Moodle", systemImage: "book.closed").font(.caption2).foregroundStyle(p.accent)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(p.accent.opacity(0.12), in: Capsule())
+                    .frame(maxHeight: .infinity)
+            }
         }
         .padding(10)
         .background(important ? p.alert.opacity(0.08) : p.tint.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(Rectangle())
     }
 }
 

@@ -68,7 +68,7 @@ struct HomeView: View {
                     if today.isEmpty {
                         StatusMessage(kind: .info, message: "今日の授業はありません。ゆっくり休んでね。")
                     } else {
-                        ForEach(Array(today.enumerated()), id: \.offset) { _, c in ClassCell(period: c.period, text: c.text) }
+                        ForEach(Array(today.enumerated()), id: \.offset) { _, c in ClassCell(period: c.period, text: c.text, day: day) }
                     }
                 } else {
                     StatusMessage(kind: .info, message: "時間割を読み取れていません。Campus Squareのページで確認してください。")

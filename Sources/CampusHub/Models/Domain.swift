@@ -134,6 +134,49 @@ struct Timetable: Codable, Hashable, Sendable {
             return t.isEmpty || t == "-" || t == "－" ? nil : (p.label, t)
         }
     }
+
+    /// 科目名を比べやすくする：全角→半角、【担当】・[曜限]・「後学期_」などの前置き・空白を除く
+    static func courseKey(_ s: String) -> String {
+        s.precomposedStringWithCompatibilityMapping
+            .replacingOccurrences(of: "【[^】]*】", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\[[^\\]]*\\]", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "^\\s*(前学期|後学期|通年活動|通年)_", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "[\\s_]", with: "", options: .regularExpression)
+            .lowercased()
+    }
+
+    /// 時間割のコマに対応する Moodle のコース（Windows版 logic.js の Timetable.moodleCourse と同じ規則）。
+    /// ① 科目コード（時間割の B31L07K1 → Moodle の短縮名 …-B31L07K101）② 科目名 の順に強く見て、
+    /// 同じ名前が複数あるときは曜限（[火1]）と今の学期（4〜9月は前学期）が合うものを選ぶ
+    static func moodleCourse(in courses: [Course], text: String, day: String, period: String,
+                             now: Date = .now, calendar: Calendar = .current) -> Course? {
+        let parts = split(text)
+        let key = courseKey(parts.title)
+        let per = period.precomposedStringWithCompatibilityMapping
+            .range(of: "\\d+", options: .regularExpression).map { String(period.precomposedStringWithCompatibilityMapping[$0]) }
+        let month = calendar.component(.month, from: now)
+        let term = (4...9).contains(month) ? "前学期" : "後学期"
+        var best: Course?
+        var bestScore = 0
+        for c in courses where c.url != nil {
+            let full = c.fullName.precomposedStringWithCompatibilityMapping
+            let short = c.shortName.precomposedStringWithCompatibilityMapping
+            var s = 0
+            if let code = parts.code, code.count >= 6, short.contains(code) || full.contains(code) { s += 10 }
+            let ck = courseKey(c.fullName)
+            if key.count >= 2, ck == key { s += 6 }
+            else if min(key.count, ck.count) >= 3, ck.contains(key) || key.contains(ck) { s += 3 }
+            if s == 0 { continue }
+            if let r = full.range(of: "\\[(.)(\\d+)", options: .regularExpression) {
+                let tag = full[r].dropFirst()  // 例: "火1"
+                if let d = tag.first, String(d) == day, String(tag.dropFirst()) == per { s += 2 }
+            }
+            if full.contains(term) { s += 1 }
+            else if full.contains("前学期") || full.contains("後学期") { s -= 3 }
+            if s >= 3, s > bestScore { best = c; bestScore = s }
+        }
+        return best
+    }
 }
 
 /// ポータルの各枠（お知らせ・掲示など）

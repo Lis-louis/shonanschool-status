@@ -96,12 +96,18 @@ function noticeLine(text, read) {
   return `<div class="notice${imp ? ' important' : ''}${read ? ' read' : ''}"><span class="dot"></span><span>${esc(text)}</span></div>`;
 }
 
-function classCell(period, text) {
+/** 時間割の1コマ。対応する Moodle のコースが見つかれば、押すとそのコースをアプリ内で開く */
+function classCell(period, text, day) {
   const p = Timetable.split(text);
   const tag = text.includes('休講') ? chip('休講', 'alert') : text.includes('教室変更') ? chip('教室変更', 'warn') : '';
-  return `<div class="classcell${Importance.is(text) ? ' important' : ''}"><div class="p">${esc(period)}</div><div>`
+  const course = day ? Timetable.moodleCourse(S.moodle.value?.courses, text, day, period) : null;
+  const cell = `<div class="classcell${Importance.is(text) ? ' important' : ''}${course ? ' linked' : ''}"><div class="p">${esc(period)}</div><div style="flex:1;min-width:0">`
     + `<div class="name">${esc(p.title)}${tag}</div>${p.rest.slice(0, 3).map(l => `<div class="small">${esc(l)}</div>`).join('')}`
-    + `${p.code ? `<div class="code">${esc(p.code)}</div>` : ''}</div></div>`;
+    + `${p.code ? `<div class="code">${esc(p.code)}</div>` : ''}</div>`
+    + (course ? `<span class="tomoodle">${icon('book')}Moodle${icon('right')}</span>` : '') + '</div>';
+  return course
+    ? `<button class="plain" data-act="openMoodle" data-url="${esc(course.url)}" title="Moodleの「${esc(course.fullName)}」を開く">${cell}</button>`
+    : cell;
 }
 
 function deadlineRow(d) {
@@ -199,7 +205,7 @@ function homeView() {
       body: stateContent(S.campus, 'campus', snap => {
         if (!snap.timetable) return statusMsg('info', '時間割を読み取れていません。Campus Squareのページで確認してください。');
         const today = Timetable.classes(snap.timetable, day);
-        return today.length ? today.map(c => classCell(c.period, c.text)).join('') : statusMsg('info', '今日の授業はありません。ゆっくり休んでね。');
+        return today.length ? today.map(c => classCell(c.period, c.text, day)).join('') : statusMsg('info', '今日の授業はありません。ゆっくり休んでね。');
       }) + `<div class="row">${btn('Campus Squareの時間割へ', 'openCampus', { url: S.config.campusSquare.timetable })}</div>`,
     });
   }
@@ -379,7 +385,7 @@ function campusView() {
         if (!tt.days.includes(V.campusDay)) V.campusDay = tt.days[0];
         h = `<div class="seg full">${tt.days.map(d => `<button class="${d === V.campusDay ? 'on' : ''}" data-act="campusDay" data-d="${esc(d)}">${esc(d)}</button>`).join('')}</div>`;
         const list = Timetable.classes(tt, V.campusDay);
-        h += list.length ? list.map(x => classCell(x.period, x.text)).join('') : statusMsg('info', `${V.campusDay}曜日の授業はありません。`);
+        h += list.length ? list.map(x => classCell(x.period, x.text, V.campusDay)).join('') : statusMsg('info', `${V.campusDay}曜日の授業はありません。`);
       } else {
         h = statusMsg('info', '時間割の表を見つけられませんでした。「ブラウザ」で時間割のページを開き、右上の「…」から「このページを時間割に設定」を選んでください。');
       }

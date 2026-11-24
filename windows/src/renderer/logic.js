@@ -61,6 +61,41 @@ const Timetable = {
     return tt.periods.map(p => ({ period: p.label, text: String(p.byDay[day] ?? '').trim() }))
       .filter(c => c.text && c.text !== '-' && c.text !== '－');
   },
+  /** 科目名を比べやすくする：全角→半角、【担当】・[曜限]・「後学期_」などの前置き・空白を除く */
+  courseKey(s) {
+    return String(s ?? '').normalize('NFKC')
+      .replace(/【[^】]*】/g, '').replace(/\[[^\]]*\]/g, '')
+      .replace(/^\s*(前学期|後学期|通年活動|通年)_/, '')
+      .replace(/[\s_]/g, '').toLowerCase();
+  },
+  /** 時間割のコマに対応する Moodle のコース。見つからなければ null。
+   *  ① 科目コード（時間割の B31L07K1 → Moodle の短縮名 …-B31L07K101）② 科目名 の順に強く見て、
+   *  同じ名前が複数あるときは曜限（[火1]）と今の学期（4〜9月は前学期）が合うものを選ぶ */
+  moodleCourse(courses, text, day, periodLabel, now = Date.now()) {
+    const { title, code } = Timetable.split(text);
+    const key = Timetable.courseKey(title);
+    const per = (String(periodLabel ?? '').normalize('NFKC').match(/\d+/) || [])[0];
+    const mon = new Date(now).getMonth() + 1;
+    const term = mon >= 4 && mon <= 9 ? '前学期' : '後学期';
+    let best = null, bestScore = 0;
+    for (const c of courses ?? []) {
+      if (!c?.url) continue;
+      const full = String(c.fullName ?? '').normalize('NFKC');
+      const short = String(c.shortName ?? '').normalize('NFKC');
+      let s = 0;
+      if (code && code.length >= 6 && (short.includes(code) || full.includes(code))) s += 10;
+      const ck = Timetable.courseKey(c.fullName);
+      if (key.length >= 2 && ck === key) s += 6;
+      else if (Math.min(key.length, ck.length) >= 3 && (ck.includes(key) || key.includes(ck))) s += 3;
+      if (s === 0) continue;
+      const dp = full.match(/\[(.)(\d+)/);
+      if (dp && dp[1] === day && dp[2] === per) s += 2;
+      if (full.includes(term)) s += 1;
+      else if (/前学期|後学期/.test(full)) s -= 3;
+      if (s >= 3 && s > bestScore) { best = c; bestScore = s; }
+    }
+    return best;
+  },
 };
 
 const SubmissionStatus = {

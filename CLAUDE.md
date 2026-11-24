@@ -68,3 +68,15 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - `Views/ServicePages.swift`：コース一覧を表示中／非表示に分け、`courseRow(_:hidden:)` を追加（目のアイコンのボタン）
 - 確認手順：Moodle 画面の「コース（教材）」で「非表示」を押す → 下の「非表示にしたコース」に移る →「戻す」で元に戻る。
   アプリを再起動しても非表示が保たれること。
+
+### 2026-11-24：時間割のコマを押すと、対応する Moodle のコースを開く
+- Windows 版で実装・実データで確認済み（0.3.2）：`logic.js` の `Timetable.moodleCourse`。
+  科目コード（時間割 `B31L07K1` ⇔ Moodle 短縮名 `…-B31L07K101`）→ 科目名（【担当】・[曜限]・学期・全角半角を無視）の順に照合し、
+  同名が複数なら曜限と今の学期で選ぶ。実際の時間割16コマすべてが正しいコースに対応した。
+- Mac 版に同じ変更を入れた：
+  - `Models/Domain.swift`：`Timetable.courseKey`・`Timetable.moodleCourse(in:text:day:period:)`
+    → **Windows の swiftc でこのファイルだけコンパイル・実行し、Windows 版と同じ結果になることは確認済み**
+  - `Views/Components.swift`：`ClassCell` に `day` を追加し、対応コースがあればボタンにして「Moodle」ラベルを出す（**未ビルド・未確認**。`@Environment(AppStore.self)` を使うようになった）
+  - `Views/HomeView.swift`・`Views/ServicePages.swift`：`ClassCell(..., day:)` を渡す
+  - `Tests/CampusHubTests/CampusHubTests.swift`：`TimetableCourseTests` を追加（未実行）
+- 確認手順：ホームの「今日の授業」と Campus Square の「時間割」で、コマの右に「Moodle」が出て、押すとそのコースが開くこと。

@@ -217,6 +217,37 @@ import Testing
     }
 }
 
+@Suite struct TimetableCourseTests {
+    let courses: [Course] = [
+        (1404, "【情】後学期_プログラミング実習[火1]（全体）", "後学期_プログラミング実習-B31L07K101"),
+        (1476, "【情】後学期_プログラミング実習[火1]（クラスA）", "【情】後学期_プログラミング実習[火1]（クラスA）"),
+        (173, "【工】前学期_（教）教育原理[火5]", "前学期_（教）教育原理-70W021A101"),
+        (1033, "【工】後学期_（教）教職入門[火5]", "後学期_（教）教職入門-70W012K101"),
+        (910, "【工】後学期_文章作成法[木4]-自己表現の技法-", "後学期_文章作成法-70D052L101"),
+        (1357, "【情】後学期_英語総合発展木３－３[木3]", "後学期_英語総合発展-B30G02C101"),
+    ].map { Course(id: $0.0, fullName: $0.1, shortName: $0.2, category: nil, progress: nil,
+                   url: URL(string: "https://m.example/course/view.php?id=\($0.0)")) }
+    let now = ISO8601DateFormatter().date(from: "2026-11-24T01:00:00Z")!
+
+    func find(_ text: String, _ day: String, _ period: String) -> Int? {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        return Timetable.moodleCourse(in: courses, text: text, day: day, period: period, now: now, calendar: cal)?.id
+    }
+
+    @Test func codeMatchWins() {
+        #expect(find("B31L07K1\nプログラミング実習【担当A・担当B】\n担当 A\n2.0単位", "火", "1限") == 1404)
+    }
+    @Test func nameMatchIgnoresTeacherTermAndWidth() {
+        #expect(find("Z30W01K1\n（教）教職入門【担当C】", "火", "5限") == 1033)
+        #expect(find("B30D05L1\n文章作成法【担当D】", "木", "4限") == 910)
+        #expect(find("B30G02C1\n英語総合発展【担当E】 木３－３", "木", "3限") == 1357)
+    }
+    @Test func noMatchIsNil() {
+        #expect(find("X99Z99K1\n存在しない科目【担当G】", "水", "1限") == nil)
+    }
+}
+
 @Suite struct ClosedEventTests {
     @Test func closedQuestionnaireIsDroppedButLateAssignmentKept() throws {
         let past = Int(Date.now.timeIntervalSince1970) - 86400

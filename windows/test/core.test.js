@@ -223,3 +223,29 @@ test('通知は提出状況が分かるまで未確認（unknown）', () => {
   assert.equal(L.SubmissionStatus.isDone(s.notices[0].status), false);
   assert.ok(L.SubmissionStatus.isDone('submitted'));
 });
+
+test('時間割のコマから Moodle のコースを見つける', () => {
+  const T = L.Timetable;
+  const now = new Date('2026-11-24T10:00:00+09:00').getTime(); // 後学期
+  const cs = [
+    [1404, '【情】後学期_プログラミング実習[火1]（全体）', '後学期_プログラミング実習-B31L07K101'],
+    [1476, '【情】後学期_プログラミング実習[火1]（クラスA）', '【情】後学期_プログラミング実習[火1]（クラスA）'],
+    [173, '【工】前学期_（教）教育原理[火5]', '前学期_（教）教育原理-70W021A101'],
+    [1033, '【工】後学期_（教）教職入門[火5]', '後学期_（教）教職入門-70W012K101'],
+    [910, '【工】後学期_文章作成法[木4]-自己表現の技法-', '後学期_文章作成法-70D052L101'],
+    [1357, '【情】後学期_英語総合発展木３－３[木3]', '後学期_英語総合発展-B30G02C101'],
+    [877, '【工＆情】後学期_共通基盤ワークショップ１Ｂ　～社会問題を解決に導く工学とは～[月1]', '後学期_共通基盤ワークショップ１Ｂ-70A022K101'],
+    [553, '【情】前学期_コンピュータシステム入門（メ）[火2]', '前学期_コンピュータシステム入門（メ）-B31L01A101'],
+  ].map(([id, fullName, shortName]) => ({ id, fullName, shortName, url: `https://m.example/course/view.php?id=${id}` }));
+  const find = (text, day, per) => T.moodleCourse(cs, text, day, per, now)?.id ?? null;
+  // 科目コードが合うもの（全体のコース）を選ぶ
+  assert.equal(find('B31L07K1\nプログラミング実習【担当A・担当B】\n担当 A\n2.0単位', '火', '1限'), 1404);
+  // コードが違っても科目名で見つける（【担当】・[曜限]・学期・全角を無視）
+  assert.equal(find('Z30W01K1\n（教）教職入門【担当C】\n担当 C\n2.0単位', '火', '5限'), 1033);
+  assert.equal(find('B30D05L1\n文章作成法【担当D】\n担当 D\n2.0単位', '木', '4限'), 910);
+  assert.equal(find('B30G02C1\n英語総合発展【担当E】 木３－３\n担当 E\n2.0単位', '木', '3限'), 1357);
+  assert.equal(find('B30A02K1\n共通基盤ワークショップ１Ｂ ～社会問題を解決に導く工学とは～【担当F】', '月', '2限'), 877);
+  // 対応するコースがなければ null
+  assert.equal(find('X99Z99K1\n存在しない科目【担当G】', '水', '1限'), null);
+  assert.equal(T.moodleCourse(null, 'B31L07K1\nプログラミング実習', '火', '1限', now), null);
+});
