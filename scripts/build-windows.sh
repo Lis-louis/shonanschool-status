@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Windows 用のインストーラー（.exe）を Mac 上で作る。
-#   ./scripts/build-windows.sh          → dist/windows/CampusHub-Setup-<版>.exe
+#   ./scripts/build-windows.sh          → CampusHub-Setup-<版>.exe（リポジトリ直下）
 #   ./scripts/build-windows.sh --test   → テストだけ
 #   ./scripts/build-windows.sh --run    → Mac 上で Windows 版の画面を起動して確認する
 #
@@ -32,5 +32,4 @@ case "${1:-}" in
   --run) exec npx electron . ;;
 esac
 
-npx electron-builder --win nsis --x64 --publish never
-echo "作成しました: $(ls -1 ../dist/windows/CampusHub-Setup-*.exe | tail -1)"
+npm run dist:win

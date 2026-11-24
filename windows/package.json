@@ -9,19 +9,41 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/",
-    "dist:win": "electron-builder --win nsis --x64"
+    "test": "node --test test/*.test.js",
+    "dist:win": "electron-builder --win nsis --x64 --publish never && node -e \"const v=require('./package.json').version,f='CampusHub-Setup-'+v+'.exe';require('fs').copyFileSync('../dist/windows/'+f,'../'+f);console.log('作成しました: '+f)\""
   },
   "build": {
     "appId": "local.campushub.app",
     "productName": "キャンパスハブ",
     "copyright": "キャンパスハブ",
-    "directories": { "output": "../dist/windows", "buildResources": "build" },
-    "files": ["src/**/*", "build/icon.png", "package.json"],
-    "extraResources": [{ "from": "../Sources/CampusHub/Resources/Appearance", "to": "Appearance", "filter": ["*.jpg"] }],
+    "directories": {
+      "output": "../dist/windows",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../Sources/CampusHub/Resources/Appearance",
+        "to": "Appearance",
+        "filter": [
+          "*.jpg"
+        ]
+      }
+    ],
     "asar": true,
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png",
       "artifactName": "CampusHub-Setup-${version}.${ext}",
       "executableName": "CampusHub"
@@ -34,9 +56,15 @@
       "createStartMenuShortcut": true,
       "shortcutName": "キャンパスハブ",
       "uninstallDisplayName": "キャンパスハブ",
-      "installerLanguages": ["ja_JP"],
+      "installerLanguages": [
+        "ja_JP"
+      ],
       "language": "1041",
       "deleteAppDataOnUninstall": false
     }
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
   }
 }
