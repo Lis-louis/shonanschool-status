@@ -245,6 +245,41 @@ struct CampusSnapshot: Sendable {
     var warnings: [String]
 }
 
+/// 休講補講参照の一覧形式で読んだ「休講・補講・教室変更」。どれも書かれている日の1回だけの変更
+/// （Windows版 logic.js の ChangeList と同じ書き方）
+enum ChangeList {
+    static let note = "今日から5週間のあいだに予定されている変更です。どれも書かれている日の1回だけで、ほかの週はいつもどおりです。"
+
+    /// 一覧形式で読んだ表か（列：日付・時限・時間割コード・科目・区分・この日の教室）
+    static func isList(_ t: ExtractedTable?) -> Bool {
+        guard let h = t?.header, h.count > 4 else { return false }
+        return h[0] == "日付" && h[4] == "区分"
+    }
+
+    /// 科目名から【担当】を除く
+    static func course(_ s: String) -> String {
+        s.replacingOccurrences(of: "【[^】]*】", with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 区分ごとの、その日についての説明
+    static func detail(kind: String, room: String) -> String {
+        switch kind {
+        case "休講": return "この日の授業はありません"
+        case "補講": return room.isEmpty ? "この日だけの授業" : "この日だけの授業（教室：\(room)）"
+        case "教室変更": return room.isEmpty ? "この日だけ教室が変わります" : "この日だけ \(room) で授業（ほかの週はいつもの教室）"
+        default: return room.isEmpty ? "" : "この日の教室：\(room)"
+        }
+    }
+
+    /// 1行にまとめた文（ホームのお知らせ用）
+    static func line(_ r: [String]) -> String {
+        func at(_ i: Int) -> String { i < r.count ? r[i] : "" }
+        let kind = at(4), room = at(5)
+        let tail = kind == "休講" ? "" : room.isEmpty ? "（この日だけ）" : "（この日だけ・\(room)）"
+        return "\(at(0)) \(at(1)) \(course(at(3))) → \(kind)\(tail)"
+    }
+}
+
 /// ホームの「やること」を今週の分だけにするための規則（Windows版 logic.js の todos({ thisWeek }) と同じ）
 enum ThisWeek {
     /// 授業は週1回なので、ホームに出す Moodle の締切は「あと7日」まで

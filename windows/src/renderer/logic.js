@@ -149,6 +149,30 @@ function moodleURL(S, p) {
   return /^https:\/\//i.test(b) ? b + p : null;
 }
 
+// MARK: - 休講・補講・教室変更の一覧（休講補講参照の一覧形式）
+
+/** どれも「書かれている日の1回だけ」の変更。教室も、その日の授業の教室であって、ほかの週はいつもの教室 */
+const ChangeList = {
+  note: '今日から5週間のあいだに予定されている変更です。どれも書かれている日の1回だけで、ほかの週はいつもどおりです。',
+  /** 休講補講参照の一覧形式で読んだ表か（列：日付・時限・時間割コード・科目・区分・この日の教室） */
+  is: t => !!t && t.header?.[0] === '日付' && t.header?.[4] === '区分',
+  /** 科目名から【担当】を除く */
+  course: s => String(s ?? '').replace(/【[^】]*】/g, '').trim(),
+  /** 区分ごとの、その日についての説明 */
+  detail(kind, room) {
+    if (kind === '休講') return 'この日の授業はありません';
+    if (kind === '補講') return room ? `この日だけの授業（教室：${room}）` : 'この日だけの授業';
+    if (kind === '教室変更') return room ? `この日だけ ${room} で授業（ほかの週はいつもの教室）` : 'この日だけ教室が変わります';
+    return room ? `この日の教室：${room}` : '';
+  },
+  /** 1行にまとめた文（ホームのお知らせ用）：「12月19日(土) 1限 社会連携講座 → 補講（この日だけの授業・4312講義室）」 */
+  line(r) {
+    const [date, period, , course, kind, room] = r;
+    const tail = kind === '休講' ? '' : room ? `（この日だけ・${room}）` : '（この日だけ）';
+    return `${date} ${period} ${ChangeList.course(course)} → ${kind}${tail}`;
+  },
+};
+
 // MARK: - 今週の分だけにする（ホームの「やること」）
 
 /** 授業は週1回なので、ホームの「やること」に出す Moodle の締切は「あと7日」まで */
@@ -295,5 +319,5 @@ function isPlaceholder(u) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus, MailCategory, todos, calendarItems, validURL, isPlaceholder, gmailURL, guessDate, cancellations, cancelledBefore, courseCode, WEEK_DAYS };
+  module.exports = { esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus, MailCategory, todos, calendarItems, validURL, isPlaceholder, gmailURL, ChangeList, guessDate, cancellations, cancelledBefore, courseCode, WEEK_DAYS };
 }

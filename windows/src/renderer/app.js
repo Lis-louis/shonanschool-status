@@ -237,7 +237,8 @@ function homeView() {
     body += stateContent(S.campus, 'campus', snap => {
       const lines = snap.portlets.flatMap(p => p.lines);
       const important = lines.filter(Importance.is);
-      const cancelRows = (snap.cancellations?.rows ?? []).map(r => r.filter(Boolean).join(' '));
+      const ct = snap.cancellations;
+      const cancelRows = (ct?.rows ?? []).map(r => (ChangeList.is(ct) ? ChangeList.line(r) : r.filter(Boolean).join(' ')));
       if (!important.length && !cancelRows.length && !snap.portlets.length) return statusMsg('info', '新しいお知らせは見つかりませんでした。');
       let h = '<div class="sub">Campus Square</div>';
       h += [...cancelRows.slice(0, 3), ...important.slice(0, 5)].map(l => noticeLine(l)).join('');
@@ -399,7 +400,18 @@ function campusView() {
     }),
   });
   const t = S.campus.value?.cancellations;
-  if (t && t.rows.length) {
+  if (ChangeList.is(t) && t.rows.length) {
+    // 一覧形式で読んだ休講・補講・教室変更：日付ごとの1回だけの変更だと分かるように書く
+    const kindColor = k => (k === '休講' ? 'alert' : k === '補講' ? 'accent' : 'warn');
+    html += card({
+      title: '休講・補講・教室変更', ic: 'bubble', tinted: true,
+      body: `<div class="small">${esc(ChangeList.note)}</div>`
+        + t.rows.slice(0, 30).map(([date, period, code, course, kind, room]) => `<div class="tablerow${kind === '休講' ? ' important' : ''}">`
+          + `<div class="row" style="flex-wrap:nowrap"><b style="flex:1">${esc(date)} ${esc(period)}</b>${chip(kind || '変更', kindColor(kind))}</div>`
+          + `<div>${esc(ChangeList.course(course))}${code ? ` <span class="tiny">${esc(code)}</span>` : ''}</div>`
+          + `<div class="small">${esc(ChangeList.detail(kind, room))}</div></div>`).join(''),
+    });
+  } else if (t && t.rows.length) {
     html += card({
       title: t.title || '休講・補講', ic: 'bubble', tinted: true,
       body: t.rows.slice(0, 30).map(row => `<div class="tablerow${Importance.is(row.join(' ')) ? ' important' : ''}">`

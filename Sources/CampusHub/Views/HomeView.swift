@@ -117,7 +117,9 @@ struct HomeView: View {
             }
             StateContent(state: store.campus, service: .campus) { snap in
                 let important = snap.portlets.flatMap(\.lines).filter(Importance.isImportant)
-                let cancelRows = (snap.cancellations?.rows ?? []).map { $0.filter { !$0.isEmpty }.joined(separator: " ") }
+                let cancelRows = (snap.cancellations?.rows ?? []).map {
+                    ChangeList.isList(snap.cancellations) ? ChangeList.line($0) : $0.filter { !$0.isEmpty }.joined(separator: " ")
+                }
                 if important.isEmpty && cancelRows.isEmpty && snap.portlets.isEmpty {
                     StatusMessage(kind: .info, message: "新しいお知らせは見つかりませんでした。")
                 } else {

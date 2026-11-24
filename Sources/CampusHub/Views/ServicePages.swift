@@ -178,7 +178,27 @@ struct CampusSummary: View {
                 }
             }
 
-            if let table = store.campus.value?.cancellations, !table.rows.isEmpty {
+            if let table = store.campus.value?.cancellations, ChangeList.isList(table), !table.rows.isEmpty {
+                // 一覧形式で読んだ休講・補講・教室変更：日付ごとの1回だけの変更だと分かるように書く
+                Card(title: "休講・補講・教室変更", symbol: "exclamationmark.bubble", tint: p.alert) {
+                    Text(ChangeList.note).font(.caption).foregroundStyle(p.subtle)
+                    ForEach(Array(table.rows.prefix(30).enumerated()), id: \.offset) { _, r in
+                        let at = { (i: Int) in i < r.count ? r[i] : "" }
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("\(at(0)) \(at(1))").font(.system(.body, design: .rounded).weight(.bold)).foregroundStyle(p.ink)
+                                Spacer()
+                                Chip(text: at(4).isEmpty ? "変更" : at(4), color: at(4) == "休講" ? p.alert : at(4) == "補講" ? p.accent : p.warn)
+                            }
+                            Text(ChangeList.course(at(3))).foregroundStyle(p.ink)
+                            Text(ChangeList.detail(kind: at(4), room: at(5))).font(.caption).foregroundStyle(p.subtle)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background((at(4) == "休講" ? p.alert.opacity(0.08) : p.tint.opacity(0.45)), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+            } else if let table = store.campus.value?.cancellations, !table.rows.isEmpty {
                 Card(title: table.title?.isEmpty == false ? table.title! : "休講・補講", symbol: "exclamationmark.bubble", tint: p.alert) {
                     ForEach(Array(table.rows.prefix(30).enumerated()), id: \.offset) { _, row in
                         TableRowCard(header: table.header, row: row)

@@ -98,6 +98,10 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
     実データで「12月19日(土) 1限 社会連携講座 補講」を読めた（全科目・10月〜1月では約100件、休講・補講の両方の class を確認）。
     締切の科目との照合は科目名に加えて時間割コード（Moodle 短縮名 …-B31N04K101 → B31N04K1）でも行う。
     Mac 版も同じ（`Web/Scripts.swift` の `campusCancellations` は Windows 版と同一の文字列であることを確認済み、`AppStore.fetchCampus`・`ThisWeek.courseCode`）。
+  - **表示の修正（0.3.6）**：題名の「（今日から5週間）」と「教室」の列から「5週間その教室」と読めてしまうため、題名は「休講・補講・教室変更」、
+    列名は「この日の教室」にし、「どれも書かれている日の1回だけで、ほかの週はいつもどおり」と説明を付けた。各行は「日付 時限」＋区分のチップ＋
+    「この日だけ ○○ で授業（ほかの週はいつもの教室）」などの文。ホームのお知らせも「12月19日(土) 1限 科目 → 補講（この日だけ・教室）」。
+    書き方は `logic.js` の `ChangeList`／Mac `Domain.swift` の `enum ChangeList`（swiftc で確認済み）。Mac の `ServicePages.swift`・`HomeView.swift` は**未ビルド**。
 - Mac 版に同じ変更を入れた：
   - `Models/Domain.swift`：`enum ThisWeek`（isLater・guessDate・cancellations・cancelledBefore）→ **swiftc でコンパイル・実行し Windows 版と同じ結果を確認済み**
   - `Store/AppStore.swift`：`todos(…, thisWeek:)`（**未ビルド**）

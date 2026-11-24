@@ -325,3 +325,16 @@ test('休講補講参照（一覧形式）の行から、時間割コードで�
   assert.equal(items.length, 1);
   assert.match(items[0].reason, /12月4日が休講/);
 });
+
+test('休講・補講・教室変更は「その日だけ」と分かる書き方にする', () => {
+  const CL = L.ChangeList;
+  const t = { title: '休講・補講・教室変更', header: ['日付', '時限', '時間割コード', '科目', '区分', 'この日の教室'], rows: [] };
+  assert.ok(CL.is(t));
+  assert.equal(CL.is({ header: ['A', 'B'] }), false);
+  assert.equal(CL.line(['12月19日(土)', '1限', 'B30E01K1', '社会連携講座（１）～いろいろな関数～【担当】', '補講', '4312講義室']),
+    '12月19日(土) 1限 社会連携講座（１）～いろいろな関数～ → 補講（この日だけ・4312講義室）');
+  assert.equal(CL.line(['12月4日(金)', '1限', 'B31N04K1', '微分積分学（メ）【担当】', '休講', 'H402講義室']), '12月4日(金) 1限 微分積分学（メ） → 休講');
+  assert.match(CL.detail('教室変更', '4312講義室'), /この日だけ 4312講義室 で授業（ほかの週はいつもの教室）/);
+  assert.equal(CL.detail('休講', 'H402講義室'), 'この日の授業はありません');
+  assert.match(CL.note, /1回だけ/);
+});

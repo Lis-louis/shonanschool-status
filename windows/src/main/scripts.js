@@ -227,7 +227,7 @@ for (const tr of Array.from(tb.rows).slice(1)) {
   const k = Object.keys(KIND).find(k => tr.classList.contains(k) || tr.querySelector("." + k));
   rows.push([c[0], c[1], c[2], c[3], k ? KIND[k] : "変更", c.length > 6 ? c[c.length - 1] : ""]);
 }
-return JSON.stringify({ title: "休講・補講・教室変更（今日から5週間）", header: ["日付", "時限", "時間割コード", "科目", "区分", "教室"], rows });
+return JSON.stringify({ title: "休講・補講・教室変更", header: ["日付", "時限", "時間割コード", "科目", "区分", "この日の教室"], rows });
 `;
 
 /** ページ内でいちばん大きい表を読み取る（休講一覧など） */
