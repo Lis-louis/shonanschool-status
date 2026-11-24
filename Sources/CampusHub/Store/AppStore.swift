@@ -78,6 +78,8 @@ final class AppStore {
 
     /// 「完了」にしたやることのID（内容は保存しない）
     private(set) var doneIDs: Set<String> { didSet { defaults.set(Array(doneIDs), forKey: Self.doneKey) } }
+    /// 「コース（教材）」から外したコース（もう受けていないコースなど）の ID
+    private(set) var hiddenCourseIDs: Set<Int> { didSet { defaults.set(Array(hiddenCourseIDs), forKey: Self.hiddenCoursesKey) } }
 
     @ObservationIgnored let moodleBrowser: BrowserController
     @ObservationIgnored let campusBrowser: BrowserController
@@ -87,6 +89,7 @@ final class AppStore {
     private static let configKey = "universityConfig.v2"
     private static let prefsKey = "appPreferences.v2"
     private static let doneKey = "doneTodoIDs.v1"
+    private static let hiddenCoursesKey = "hiddenCourseIDs.v1"
     @ObservationIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -101,6 +104,7 @@ final class AppStore {
         config = cfg
         prefs = pr
         doneIDs = Set(defaults.stringArray(forKey: Self.doneKey) ?? [])
+        hiddenCourseIDs = Set(defaults.array(forKey: Self.hiddenCoursesKey) as? [Int] ?? [])
         let theme = pr.themeOfficialPages ? cfg.trustedDomain : nil
         moodleBrowser = BrowserController(service: .moodle, themeDomain: theme)
         campusBrowser = BrowserController(service: .campus, themeDomain: theme)
@@ -210,6 +214,11 @@ final class AppStore {
 
     func toggleDone(_ id: String) {
         if doneIDs.contains(id) { doneIDs.remove(id) } else { doneIDs.insert(id) }
+    }
+
+    /// コースを「コース（教材）」の一覧から外す・戻す
+    func setCourseHidden(_ id: Int, _ hidden: Bool) {
+        if hidden { hiddenCourseIDs.insert(id) } else { hiddenCourseIDs.remove(id) }
     }
 
     func gmailURL(for m: MailMessage) -> URL? {

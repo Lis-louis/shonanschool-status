@@ -204,6 +204,13 @@ select.input { padding: 7px 12px; width: auto; }
 
 .course { padding: 10px; border-radius: 14px; background: color-mix(in srgb, var(--tint) 45%, transparent); display: flex; flex-direction: column; gap: 5px; }
 .course .n { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+.courserow { display: flex; gap: 8px; align-items: center; }
+.courserow > .plain { flex: 1; min-width: 0; }
+.courserow.hidden .course { opacity: .65; }
+.hidebtn { flex: none; border: 0; background: transparent; cursor: pointer; color: var(--subtle); border-radius: 12px; padding: 6px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; }
+.hidebtn svg.i { font-size: 17px; }
+.hidebtn:hover { background: var(--tint); color: var(--accent); }
 .softbar { height: 6px; border-radius: 6px; background: var(--tint); flex: 1; overflow: hidden; }
 .softbar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(to right, color-mix(in srgb, var(--accent2) 70%, transparent), var(--accent)); min-width: 6px; }
 

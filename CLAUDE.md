@@ -10,6 +10,8 @@
 - 配布は GitHub Releases。`windows/package.json` の `version` を上げて main に push すると、
   `.github/workflows/release-windows.yml` がテスト → ビルド → Release（タグ `v<version>`）公開まで行う。
   version を上げない push では何もしない。exe はリポジトリに入れない（`.gitignore` 済み）。
+  アップロードは `gh release` で行い、latest.yml を最後に上げる。途中で失敗したら Actions の Run workflow で足りないファイルを上げ直せる。
+  （v0.3.0 は electron-builder の `--publish always` でのアップロードに失敗し、blockmap だけの Release が残っている。0.3.1 から今の方式）
 - アプリ側は `windows/src/main/updater.js`（electron-updater）。配布版でだけ、起動10秒後と3時間ごとに確認 →
   裏でダウンロード → 画面上部に「再起動して更新」（`app.js` の `updateBanner`）。押さなくても終了時に入れ替わる。
 - 0.3.0 で導入。0.2.0 以前は自動更新がないので、利用者は一度だけ手で入れ直す必要がある。
@@ -57,3 +59,12 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - `Web/Scripts.swift`：判定語に「もう一度受験する」「Re-attempt quiz」
 - 確認手順：Moodle 画面の「通知」で、提出済みの課題の「提出期限 …」が下の折りたたみに入ること。診断ログに
   「通知のうち課題などへのリンク N件: 提出済み M件…」が出ること。
+
+### 2026-11-24：もう受けていないコースを「コース（教材）」から外す・戻す
+- Windows 版で実装・確認済み（0.3.1）：各コースの右に「非表示」、外したものは「非表示にしたコース（N件）」に入り「戻す」で戻る。
+  保存先は settings.json の `hiddenCourses`（コース ID の配列）。
+- Mac 版に同じ変更を入れた（**未ビルド・未確認**）：
+  - `Store/AppStore.swift`：`hiddenCourseIDs`（UserDefaults `hiddenCourseIDs.v1`）と `setCourseHidden(_:_:)`
+  - `Views/ServicePages.swift`：コース一覧を表示中／非表示に分け、`courseRow(_:hidden:)` を追加（目のアイコンのボタン）
+- 確認手順：Moodle 画面の「コース（教材）」で「非表示」を押す → 下の「非表示にしたコース」に移る →「戻す」で元に戻る。
+  アプリを再起動しても非表示が保たれること。

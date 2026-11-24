@@ -1,7 +1,7 @@
 {
   "name": "campushub",
   "productName": "キャンパスハブ",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "湘南工科大学の Moodle・Campus Square・大学メールを1つにまとめるアプリ（Windows版）",
   "author": "キャンパスハブ",
   "license": "MIT",
@@ -10,8 +10,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist:win": "electron-builder --win nsis --x64 --publish never",
-    "release:win": "electron-builder --win nsis --x64 --publish always"
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
   },
   "build": {
     "appId": "local.campushub.app",

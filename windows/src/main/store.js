@@ -45,6 +45,8 @@ class AppStore {
     this.config = mergeDefaults(DEFAULT_CONFIG, saved.config);
     this.prefs = mergeDefaults(DEFAULT_PREFS, saved.prefs);
     this.doneIDs = new Set(Array.isArray(saved.doneIDs) ? saved.doneIDs : []);
+    /** 「コース（教材）」から外したコース（もう受けていないコースなど）の ID */
+    this.hiddenCourses = new Set(Array.isArray(saved.hiddenCourses) ? saved.hiddenCourses.filter(Number.isSafeInteger) : []);
 
     this.moodle = loading();
     this.campus = loading();
@@ -95,7 +97,7 @@ class AppStore {
     const browsers = {};
     for (const [k, b] of Object.entries(this.browsers)) browsers[k] = b.info();
     return {
-      config: this.config, prefs: this.prefs, doneIDs: [...this.doneIDs],
+      config: this.config, prefs: this.prefs, doneIDs: [...this.doneIDs], hiddenCourses: [...this.hiddenCourses],
       moodle: this.moodle, campus: this.campus, mail: this.mail,
       lastUpdated: this.lastUpdated, isRefreshing: this.isRefreshing, toast: this.toast,
       diagnostics: this.diagnostics, campusMenu: this.campusMenu,
@@ -115,7 +117,7 @@ class AppStore {
   save() {
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
-      fs.writeFileSync(this.file + '.tmp', JSON.stringify({ config: this.config, prefs: this.prefs, doneIDs: [...this.doneIDs] }, null, 2));
+      fs.writeFileSync(this.file + '.tmp', JSON.stringify({ config: this.config, prefs: this.prefs, doneIDs: [...this.doneIDs], hiddenCourses: [...this.hiddenCourses] }, null, 2));
       fs.renameSync(this.file + '.tmp', this.file);
     } catch (e) {
       this.diag('全体', `設定を保存できませんでした: ${e.message}`, false);
@@ -256,6 +258,14 @@ class AppStore {
   }
 
   // MARK: - やること
+
+  /** コースを「コース（教材）」の一覧から外す・戻す */
+  setCourseHidden(id, hidden) {
+    if (!Number.isSafeInteger(id)) return;
+    if (hidden) this.hiddenCourses.add(id); else this.hiddenCourses.delete(id);
+    this.save();
+    this.emit();
+  }
 
   toggleDone(id) {
     if (this.doneIDs.has(id)) this.doneIDs.delete(id); else this.doneIDs.add(id);

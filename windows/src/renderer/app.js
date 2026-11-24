@@ -330,13 +330,29 @@ function moodleView() {
         + (done.length ? `<details><summary>提出済み・回答済みの課題の通知（${done.length}件）</summary><div class="stack">${done.map(row).join('')}</div></details>` : ''),
     });
   }
+  // もう受けていないコースは「非表示」で一覧から外せる（下の「非表示にしたコース」から戻せる）
+  const hiddenIDs = new Set(S.hiddenCourses ?? []);
+  const courseRow = (co, hidden) => `<div class="courserow${hidden ? ' hidden' : ''}">`
+    + `<button class="plain" data-act="openMoodle" data-url="${esc(co.url ?? '')}">`
+    + `<div class="course"><div class="n"><span style="flex:1">${esc(co.fullName)}</span><span class="small">${icon('right')}</span></div>`
+    + `${co.category ? `<div class="small">${esc(co.category)}</div>` : ''}`
+    + `${!hidden && co.progress != null ? `<div class="row" style="flex-wrap:nowrap"><div class="softbar"><i style="width:${Math.min(100, Math.max(0, co.progress))}%"></i></div><span class="tiny">${Math.floor(co.progress)}%</span></div>` : ''}`
+    + '</div></button>'
+    + (hidden ? btn(icon('eye') + '戻す', 'showCourse', { id: co.id })
+      : `<button class="hidebtn" data-act="hideCourse" data-id="${co.id}" title="このコースを一覧から外す（あとで戻せます）">${icon('eyeOff')}<span>非表示</span></button>`)
+    + '</div>';
   html += card({
     title: 'コース（教材）', ic: 'books',
-    body: stateContent(S.moodle, 'moodle', s => (s.courses.length ? s.courses.map(co => `<button class="plain" data-act="openMoodle" data-url="${esc(co.url ?? '')}">`
-      + `<div class="course"><div class="n"><span style="flex:1">${esc(co.fullName)}</span><span class="small">${icon('right')}</span></div>`
-      + `${co.category ? `<div class="small">${esc(co.category)}</div>` : ''}`
-      + `${co.progress != null ? `<div class="row" style="flex-wrap:nowrap"><div class="softbar"><i style="width:${Math.min(100, Math.max(0, co.progress))}%"></i></div><span class="tiny">${Math.floor(co.progress)}%</span></div>` : ''}`
-      + '</div></button>').join('') : statusMsg('info', '受講中のコースはありません。'))),
+    body: stateContent(S.moodle, 'moodle', s => {
+      if (!s.courses.length) return statusMsg('info', '受講中のコースはありません。');
+      const shown = s.courses.filter(co => !hiddenIDs.has(co.id));
+      const hidden = s.courses.filter(co => hiddenIDs.has(co.id));
+      let h = shown.length ? shown.map(co => courseRow(co, false)).join('')
+        : statusMsg('info', 'すべてのコースを非表示にしています。下の「非表示にしたコース」から戻せます。');
+      if (hidden.length) h += `<details><summary>非表示にしたコース（${hidden.length}件）</summary><div class="stack">${hidden.map(co => courseRow(co, true)).join('')}</div></details>`;
+      else h += '<div class="small">もう受けていないコースは、右の「非表示」で一覧から外せます（あとで戻せます）。</div>';
+      return h;
+    }),
   });
   const base = String(c.moodleBaseURL).replace(/\/+$/, '');
   html += card({
@@ -677,6 +693,8 @@ const actions = {
   openCampus: d => openInApp('campus', d.url),
   openExternal: d => { if (d.url) hub.act('openExternal', d.url); },
   toggleDone: d => hub.act('toggleDone', d.id),
+  hideCourse: d => hub.act('setCourseHidden', Number(d.id), true),
+  showCourse: d => hub.act('setCourseHidden', Number(d.id), false),
   toggleMail: d => { if (V.mailOpen.has(d.id)) V.mailOpen.delete(d.id); else V.mailOpen.add(d.id); render(); },
   mailFilter: d => { V.mailFilter = d.c || null; render(); },
   portlet: d => { if (V.portletOpen.has(d.t)) V.portletOpen.delete(d.t); else V.portletOpen.add(d.t); render(); },

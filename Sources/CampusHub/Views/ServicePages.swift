@@ -62,28 +62,24 @@ struct MoodleSummary: View {
 
             Card(title: "コース（教材）", symbol: "books.vertical") {
                 StateContent(state: store.moodle, service: .moodle) { snap in
+                    // もう受けていないコースは「非表示」で一覧から外せる（下の「非表示にしたコース」から戻せる）
+                    let shown = snap.courses.filter { !store.hiddenCourseIDs.contains($0.id) }
+                    let hidden = snap.courses.filter { store.hiddenCourseIDs.contains($0.id) }
                     if snap.courses.isEmpty {
                         StatusMessage(kind: .info, message: "受講中のコースはありません。")
+                    } else if shown.isEmpty {
+                        StatusMessage(kind: .info, message: "すべてのコースを非表示にしています。下の「非表示にしたコース」から戻せます。")
                     } else {
-                        ForEach(snap.courses) { course in
-                            Button { store.openInApp(course.url, service: .moodle) } label: {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    HStack {
-                                        Text(course.fullName).font(.system(.body, design: .rounded).weight(.medium)).foregroundStyle(p.ink)
-                                            .multilineTextAlignment(.leading)
-                                        Spacer()
-                                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.subtle)
-                                    }
-                                    if let cat = course.category, !cat.isEmpty { Text(cat).font(.caption).foregroundStyle(p.subtle) }
-                                    if let prog = course.progress {
-                                        HStack { SoftBar(value: prog / 100); Text("\(Int(prog))%").font(.caption2).foregroundStyle(p.subtle) }
-                                    }
-                                }
-                                .padding(10)
-                                .background(p.tint.opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .contentShape(Rectangle())
-                            }.buttonStyle(.plain)
+                        ForEach(shown) { course in courseRow(course, hidden: false) }
+                    }
+                    if !hidden.isEmpty {
+                        DisclosureGroup("非表示にしたコース（\(hidden.count)件）") {
+                            ForEach(hidden) { course in courseRow(course, hidden: true) }
                         }
+                        .font(.system(.callout, design: .rounded)).foregroundStyle(p.subtle)
+                    } else if !snap.courses.isEmpty {
+                        Text("もう受けていないコースは、右の「非表示」で一覧から外せます（あとで戻せます）。")
+                            .font(.caption).foregroundStyle(p.subtle)
                     }
                 }
             }
@@ -94,6 +90,40 @@ struct MoodleSummary: View {
                 LinkRow(title: "今後の予定（カレンダー）", symbol: "calendar.badge.clock") { store.openInApp(c.moodleUpcoming, service: .moodle) }
                 LinkRow(title: "通知一覧", symbol: "bell") { store.openInApp(c.moodleNotifications, service: .moodle) }
             }
+        }
+    }
+
+    private func courseRow(_ course: Course, hidden: Bool) -> some View {
+        HStack(spacing: 8) {
+            Button { store.openInApp(course.url, service: .moodle) } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack {
+                        Text(course.fullName).font(.system(.body, design: .rounded).weight(.medium)).foregroundStyle(p.ink)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.subtle)
+                    }
+                    if let cat = course.category, !cat.isEmpty { Text(cat).font(.caption).foregroundStyle(p.subtle) }
+                    if !hidden, let prog = course.progress {
+                        HStack { SoftBar(value: prog / 100); Text("\(Int(prog))%").font(.caption2).foregroundStyle(p.subtle) }
+                    }
+                }
+                .padding(10)
+                .background(p.tint.opacity(0.45), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(Rectangle())
+                .opacity(hidden ? 0.65 : 1)
+            }.buttonStyle(.plain)
+            Button { store.setCourseHidden(course.id, !hidden) } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: hidden ? "eye" : "eye.slash").font(.body)
+                    Text(hidden ? "戻す" : "非表示").font(.caption2)
+                }
+                .foregroundStyle(hidden ? p.accent : p.subtle)
+                .frame(minWidth: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(hidden ? "このコースを一覧に戻す" : "このコースを一覧から外す（あとで戻せます）")
         }
     }
 

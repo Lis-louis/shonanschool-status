@@ -1,10 +1,12 @@
 # Windows 版の配布（自動更新の元になる GitHub Release）を作る。
 #
 # windows/package.json の "version" を上げて main に push すると、
-#   1. その版の Release（タグ v<version>）がまだ無ければ
-#   2. テスト → インストーラー（exe）をビルド → Release に exe・latest.yml・blockmap を上げる
+#   1. その版の Release（タグ v<version>）がまだ揃っていなければ
+#   2. テスト → インストーラー（exe）をビルド → Release に exe・blockmap・latest.yml を上げる
 # インストール済みのアプリは latest.yml を見て新しい版に気づき、自動で更新する。
-# version を上げていない push では何もしない（同じ版の Release があればスキップ）。
+# version を上げていない push では何もしない（同じ版の Release に latest.yml まで揃っていればスキップ）。
+# 途中で失敗して Release が欠けているときは、もう一度動かすと足りないファイルを上げ直す
+# （Actions →「Windows 版をリリース」→ Run workflow）。
 name: Windows 版をリリース
 
 on:
@@ -31,7 +33,7 @@ jobs:
         shell: bash
         working-directory: windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: 版を確認
         id: ver
@@ -40,15 +42,15 @@ jobs:
         run: |
           v=$(node -p "require('./package.json').version")
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          if gh release view "v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "v$v の Release はもうあるので、何もしません（配るには windows/package.json の version を上げてください）"
+          if gh release view "v$v" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null | grep -qx latest.yml; then
+            echo "v$v の Release はもう揃っているので、何もしません（配るには windows/package.json の version を上げてください）"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "v$v を新しくリリースします"
+            echo "v$v をリリースします"
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: steps.ver.outputs.skip == 'false'
         with:
           node-version: lts/*
@@ -63,8 +65,25 @@ jobs:
         if: steps.ver.outputs.skip == 'false'
         run: npm test
 
-      - name: ビルドして Release に上げる
+      - name: ビルド
+        if: steps.ver.outputs.skip == 'false'
+        run: npm run dist:win
+
+      - name: Release に上げる
         if: steps.ver.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: npm run release:win
+          V: ${{ steps.ver.outputs.version }}
+        working-directory: dist/windows
+        run: |
+          set -euo pipefail
+          exe="CampusHub-Setup-$V.exe"
+          ls -la "$exe" "$exe.blockmap" latest.yml
+          if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v$V" "$exe" "$exe.blockmap" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "v$V" "$exe" "$exe.blockmap" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "v$V" --generate-notes
+          fi
+          # latest.yml は最後に上げる（これが見えた時点でアプリが更新を始めるため、先に exe を揃えておく）
+          gh release upload "v$V" latest.yml --clobber --repo "$GITHUB_REPOSITORY"

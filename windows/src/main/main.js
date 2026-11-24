@@ -187,6 +187,7 @@ function registerIPC() {
     cancelGoogle: () => store.cancelGoogle(),
     signOutGoogle: () => store.signOutGoogle(),
     toggleDone: id => store.toggleDone(String(id)),
+    setCourseHidden: (id, hidden) => store.setCourseHidden(Number(id), !!hidden),
     loadMonth: (y, m) => store.loadMonth(Number(y), Number(m)),
     dismissToast: () => store.setToast(null),
     testNotification: () => store.testNotification(),

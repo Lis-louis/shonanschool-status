@@ -73,7 +73,7 @@ To check right away, use **Settings → App → Check for updates** (or the menu
 |---|---|
 | Home | Today's classes / **To-dos** = unfinished Moodle assignments + mail that needs action / announcements / mail from the university |
 | Calendar | Month view of the weekly timetable, Moodle events, deadlines, and due dates found in mail |
-| Moodle | **Summary**: assignments and deadlines, notifications, courses (with progress). **Browser**: the official site inside the app |
+| Moodle | **Summary**: assignments and deadlines, notifications (those about work you have already submitted are folded away), courses (with progress; hide courses you no longer take with "Hide" and bring them back from "Hidden courses"). **Browser**: the official site inside the app |
 | Campus Square | **Summary**: timetable by weekday, cancellations / make-up classes, portal announcements. **Browser**: the official site |
 | Mail | Reads Gmail (read-only) and sorts it by content |
 | Settings | Sign-in, Gmail connection, automatic sign-in, URLs, what to show, notifications, sample data, app version and update check (Windows), **connection diagnostics** |
