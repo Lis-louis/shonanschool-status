@@ -50,6 +50,8 @@ class AppStore {
     this.campus = loading();
     this.mail = loading();
     this.lastUpdated = null;
+    /** アプリの自動更新（updater.js が書き換える）: null | { status: 'downloading' | 'ready', version, percent } */
+    this.update = null;
     this.isRefreshing = false;
     this.toast = null;
     this.diagnostics = [];
@@ -101,6 +103,7 @@ class AppStore {
       googleSignedIn: this.googleSignedIn, googleClientReady: this.googleClientReady, googleBusy: this.googleBusy,
       monthItems: this.monthItems, monthErrors: this.monthErrors, monthLoading: [...this.monthLoading],
       browsers, encryptionAvailable: Secrets.available(), diagPath: DiagFile.path,
+      update: this.update, appVersion: app.getVersion(),
     };
   }
 
@@ -351,12 +354,15 @@ class AppStore {
     }
   }
 
-  /** 課題・アンケートのページを開いて提出状況を確かめ、外部フォームは Gmail の控えメールと照合する */
+  /** 課題・アンケートのページを開いて提出状況を確かめ、外部フォームは Gmail の控えメールと照合する。
+   *  通知（「提出期限 …: 第7回課題」など）も、リンク先が課題などのページなら同じように確かめる */
   async checkSubmissions(snap, s, log) {
     const targets = snap.deadlines.filter(d => d.url).slice(0, 60);
-    if (!targets.length) return;
+    const noticeTargets = snap.notices.filter(n => n.url && Parsers.isActivityURL(n.url));
+    const urls = [...new Set([...targets.map(d => d.url), ...noticeTargets.map(n => n.url)])];
+    if (!urls.length) return;
     try {
-      const raw = await s.run(Scripts.moodleSubmissionStatus, { urls: targets.map(d => d.url) }, 'page');
+      const raw = await s.run(Scripts.moodleSubmissionStatus, { urls }, 'page');
       let results;
       try { results = JSON.parse(raw); } catch { results = null; }
       if (!Array.isArray(results)) { log('提出状況の確認: 結果を読めませんでした', false); return; }
@@ -369,10 +375,18 @@ class AppStore {
         d.status = valid.includes(r.status) ? r.status : 'unknown';
         d.formURL = r.form ? SafeURL.https(r.form) : null;
       }
+      for (const n of noticeTargets) {
+        const r = byURL.get(n.url);
+        if (r) n.status = valid.includes(r.status) ? r.status : 'unknown';
+      }
       // 何の文言で判定したかを集計してログに残す（内容は残さない）
       const counts = {};
       for (const r of results) { const k = `${r.status}:${r.hit}`; counts[k] = (counts[k] ?? 0) + 1; }
       log(`提出状況の確認 ${results.length}件: ` + Object.entries(counts).map(([k, v]) => `${k}×${v}`).sort().join(' / '), true);
+      if (noticeTargets.length) {
+        const doneN = noticeTargets.filter(n => Parsers.doneStatus(n.status)).length;
+        log(`通知のうち課題などへのリンク ${noticeTargets.length}件: 提出済み ${doneN}件を「提出済みの通知」にまとめます`, true);
+      }
     } catch (e) {
       log(`提出状況の確認に失敗: ${e.message}`, false);
       return;
@@ -390,6 +404,9 @@ class AppStore {
     } catch (e) {
       log(`フォームの控えメールを確認できませんでした: ${e.message}`, false);
     }
+    // 同じ課題の締切が「控えメールあり」になったら、その通知も回答済みにする
+    const byDeadline = new Map(snap.deadlines.filter(d => d.url).map(d => [d.url, d.status]));
+    for (const n of noticeTargets) if (byDeadline.get(n.url) === 'formReceipt') n.status = 'formReceipt';
   }
 
   async fetchCampus() {

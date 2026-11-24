@@ -114,7 +114,7 @@ URL を載せにくい場所では、1行目の表記だけでもかまいませ
 ## 6. その他
 
 - 上の内容に当てはまらない使い方や、判断に迷う使い方をしたいときは、
-  [GitHub の Issues](https://github.com/Lis-louis/my-school-status/issues) から事前にご相談ください。
+  [GitHub の Issues](https://github.com/Lis-louis/shonanschool-status/issues) から事前にご相談ください。
   内容によっては個別に許可することがあります。
 - このガイドラインに反する使用があった場合、権利者は公開の停止や削除を求めることがあります。
 - このガイドラインは予告なく変更することがあります。変更後は新しいガイドラインが適用されます。

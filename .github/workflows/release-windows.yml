@@ -1,0 +1,70 @@
+# Windows 版の配布（自動更新の元になる GitHub Release）を作る。
+#
+# windows/package.json の "version" を上げて main に push すると、
+#   1. その版の Release（タグ v<version>）がまだ無ければ
+#   2. テスト → インストーラー（exe）をビルド → Release に exe・latest.yml・blockmap を上げる
+# インストール済みのアプリは latest.yml を見て新しい版に気づき、自動で更新する。
+# version を上げていない push では何もしない（同じ版の Release があればスキップ）。
+name: Windows 版をリリース
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - 'Sources/CampusHub/Resources/Appearance/**'
+      - '.github/workflows/release-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-windows
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 版を確認
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$v の Release はもうあるので、何もしません（配るには windows/package.json の version を上げてください）"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "v$v を新しくリリースします"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.ver.outputs.skip == 'false'
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: windows/package-lock.json
+
+      - name: 依存を入れる
+        if: steps.ver.outputs.skip == 'false'
+        run: npm ci
+
+      - name: テスト
+        if: steps.ver.outputs.skip == 'false'
+        run: npm test
+
+      - name: ビルドして Release に上げる
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run release:win

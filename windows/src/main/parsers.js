@@ -86,6 +86,8 @@ function parseMoodle(json, config, log = () => {}, now = Date.now()) {
   }
   const notices = (n?.notifications ?? []).map(x => ({
     id: x.id, subject: plainText(x.subject), time: secToMs(x.timecreated), read: !!x.read, url: link(x.contexturl),
+    // 課題・小テストなどの通知は、リンク先のページで提出済みか確かめる（store.checkSubmissions）
+    status: 'unknown',
   }));
   deadlines = deadlines.sort((a, c) => a.due - c.due);
   return {
@@ -124,6 +126,11 @@ function parseMonth(json, config) {
 }
 
 const doneStatus = s => s === 'submitted' || s === 'formReceipt';
+
+/** Moodle の活動（課題・小テスト・アンケートなど）のページか。通知のリンク先の提出状況を確かめる対象 */
+function isActivityURL(u) {
+  try { return /\/mod\/[a-z]+\/view\.php$/.test(new URL(u).pathname) && new URL(u).searchParams.has('id'); } catch { return false; }
+}
 
 // MARK: - 日付の読み取り
 
@@ -278,6 +285,6 @@ function hasReceipt(d, receipts) {
 }
 
 module.exports = {
-  plainText, parseMoodle, parseMonth, ParseError, doneStatus, DateExtractor, MailClassifier,
+  plainText, parseMoodle, parseMonth, ParseError, doneStatus, isActivityURL, DateExtractor, MailClassifier,
   parseFrom, convertGmail, coreTitle, hasReceipt,
 };

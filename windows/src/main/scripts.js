@@ -209,9 +209,9 @@ return JSON.stringify({ title, header: rows[0], rows: rows.slice(1, 200).filter(
 const moodleSubmissionStatus = String.raw`
 const SUB = ["あなたの回答を表示", "あなたの回答", "回答済み", "すでに回答", "既に回答", "回答を送信しました", "送信済み",
              "評定のために提出済み", "提出済み", "提出を編集する", "前回の受験の概要", "受験済み",
-             "あなたの選択", "回答を削除する",
+             "あなたの選択", "回答を削除する", "もう一度受験する",
              "View your response", "Your response", "You've completed", "Submitted for grading", "Edit submission",
-             "Summary of your previous attempts", "Your selection", "Remove my choice"];
+             "Summary of your previous attempts", "Your selection", "Remove my choice", "Re-attempt quiz"];
 const OPEN = ["提出をアップロード・入力する", "提出を追加する", "未提出", "まだ回答していません", "回答していません", "提出なし",
               "質問に回答する", "今すぐ受験する", "受験を開始する", "問題を受験する", "受験を続ける", "回答を保存する",
               "Add submission", "No submission", "Not submitted", "Answer the questions", "Attempt quiz", "Continue your attempt",

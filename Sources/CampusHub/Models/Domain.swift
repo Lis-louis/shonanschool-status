@@ -78,6 +78,14 @@ struct MoodleNotice: Identifiable, Hashable, Sendable {
     var time: Date
     var read: Bool
     var url: URL?
+    /// 課題・小テストなどの通知は、リンク先のページで提出済みか確かめる（AppStore.checkSubmissions）
+    var status: SubmissionStatus = .unknown
+
+    /// Moodle の活動（課題・小テスト・アンケートなど）のページへのリンクか
+    var linksToActivity: Bool {
+        guard let url, url.path.range(of: #"/mod/[a-z]+/view.php$"#, options: .regularExpression) != nil else { return false }
+        return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "id" } ?? false
+    }
 }
 
 struct MoodleSnapshot: Sendable {

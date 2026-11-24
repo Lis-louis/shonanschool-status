@@ -202,3 +202,24 @@ test('ページ内スクリプトに引数を渡す形', async () => {
   const code = wrap('return a + b.length;', { a: 1, b: 'x"y', 'bad-name': 2 });
   assert.equal(await eval(code), 4);
 });
+
+test('通知のリンク先が課題などのページかを見分ける', () => {
+  assert.ok(P.isActivityURL('https://moodle2026.shonan-it.ac.jp/mod/assign/view.php?id=123'));
+  assert.ok(P.isActivityURL('https://moodle2026.shonan-it.ac.jp/mod/quiz/view.php?id=9'));
+  assert.equal(P.isActivityURL('https://moodle2026.shonan-it.ac.jp/course/view.php?id=5'), false);
+  assert.equal(P.isActivityURL('https://moodle2026.shonan-it.ac.jp/calendar/view.php?view=upcoming'), false);
+  assert.equal(P.isActivityURL('https://moodle2026.shonan-it.ac.jp/mod/assign/view.php'), false);
+  assert.equal(P.isActivityURL(null), false);
+});
+
+test('通知は提出状況が分かるまで未確認（unknown）', () => {
+  const json = JSON.stringify({
+    courses: { data: { courses: [] } }, events: { data: { events: [] } }, upcoming: { data: { events: [] } },
+    notices: { data: { unreadcount: 1, notifications: [{ id: 1, subject: '提出期限: 第7回課題', timecreated: 1, read: false,
+      contexturl: 'https://moodle2026.shonan-it.ac.jp/mod/assign/view.php?id=123' }] } },
+  });
+  const s = P.parseMoodle(json, C);
+  assert.equal(s.notices[0].status, 'unknown');
+  assert.equal(L.SubmissionStatus.isDone(s.notices[0].status), false);
+  assert.ok(L.SubmissionStatus.isDone('submitted'));
+});
