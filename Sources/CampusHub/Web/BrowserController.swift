@@ -15,6 +15,8 @@ final class BrowserController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     @ObservationIgnored weak var store: AppStore?
     @ObservationIgnored private var lastAutoSubmit: Date?
     @ObservationIgnored private var downloadNames: [ObjectIdentifier: URL] = [:]
+    /// window.open を同じ画面で開く前のページ（ページの「閉じる」ボタンで戻る先）
+    @ObservationIgnored private var returnURL: URL?
 
     var canGoBack = false
     var canGoForward = false
@@ -114,6 +116,12 @@ final class BrowserController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
         return .allow
     }
 
+    /// 表示プロセスが落ちたとき（そのままだと真っ白になる）は開き直す
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if let url = webView.url ?? currentURL { webView.load(URLRequest(url: url)) } else { webView.reload() }
+        message = "ページが応答しなくなったため、開き直しました。"
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
         navigationResponse.canShowMIMEType ? .allow : .download
     }
@@ -151,14 +159,26 @@ final class BrowserController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
 
     // MARK: WKUIDelegate
 
-    /// target=_blank / window.open は同じ画面で開く
+    /// target=_blank / window.open は同じ画面で開く（「閉じる」で戻れるよう、開く前のページを覚えておく）
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let url = navigationAction.request.url {
-            if SafeURL.isTrusted(url, domain: store?.config.trustedDomain ?? "") { webView.load(navigationAction.request) }
-            else if ["http", "https"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
+            if SafeURL.isTrusted(url, domain: store?.config.trustedDomain ?? "") {
+                returnURL = webView.url
+                webView.load(navigationAction.request)
+            } else if ["http", "https"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
         }
         return nil
+    }
+
+    /// ページが window.close() したとき（キャンパススクエアの「閉じる」ボタンなど）は、開く前のページへ戻る
+    func webViewDidClose(_ webView: WKWebView) {
+        if let url = returnURL {
+            returnURL = nil
+            webView.load(URLRequest(url: url))
+        } else if webView.canGoBack {
+            webView.goBack()
+        }
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
