@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Windows 用のインストーラー（.exe）を Mac 上で作る。
-#   ./scripts/build-windows.sh          → CampusHub-Setup-<版>.exe（リポジトリ直下）
+#   ./scripts/build-windows.sh          → dist/windows/CampusHub-Setup-<版>.exe（配布は GitHub Actions が Releases に上げる）
 #   ./scripts/build-windows.sh --test   → テストだけ
 #   ./scripts/build-windows.sh --run    → Mac 上で Windows 版の画面を起動して確認する
 #

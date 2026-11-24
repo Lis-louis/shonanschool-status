@@ -3,6 +3,29 @@
 キャンパスハブ：Mac 版（Swift / `Sources/CampusHub`）と Windows 版（Electron / `windows/`）の2本立て。
 片方を直したら、もう片方にも同じ問題がないか確認すること。
 
+リポジトリ：https://github.com/Lis-louis/shonanschool-status（旧名 my-school-status。アプリの表示名「キャンパスハブ」は変えていない）
+
+## Windows 版の配布と自動更新
+
+- 配布は GitHub Releases。`windows/package.json` の `version` を上げて main に push すると、
+  `.github/workflows/release-windows.yml` がテスト → ビルド → Release（タグ `v<version>`）公開まで行う。
+  version を上げない push では何もしない。exe はリポジトリに入れない（`.gitignore` 済み）。
+- アプリ側は `windows/src/main/updater.js`（electron-updater）。配布版でだけ、起動10秒後と3時間ごとに確認 →
+  裏でダウンロード → 画面上部に「再起動して更新」（`app.js` の `updateBanner`）。押さなくても終了時に入れ替わる。
+- 0.3.0 で導入。0.2.0 以前は自動更新がないので、利用者は一度だけ手で入れ直す必要がある。
+
+## Mac 版で後でやること
+
+### 自動更新（Windows 版は 0.3.0 で実装済み、Mac 版は未着手）
+- Windows 版と同じく「新しい版があれば知らせて、ボタンで更新できる」ようにする。
+- 候補：[Sparkle](https://sparkle-project.org/)（SwiftPM で入る。appcast.xml と EdDSA 署名が必要）。
+  署名・公証していない .app だと更新後に Gatekeeper に止められる可能性があるので、そこも確認する。
+- 配布の流れも Windows 版に合わせる：version を上げて push → GitHub Actions（macos ランナー）で
+  `scripts/build-pkg.sh` 相当をビルドし、同じ Release に Mac 用ファイルと appcast を追加する。
+  Windows 用ワークフローは「その版の Release が既にあればスキップ」するので、Mac 用を足すときは同じ Release に相乗りできるよう調整すること。
+- 設定画面の「アプリ」カード（バージョン表示・アップデートを確認）も Mac 版に追加する。
+- 終わったら README（日本語・英語）の「Mac 版の自動アップデートは準備中」「開発状況」の行を直すこと。
+
 ## Mac で確認が必要な未検証の変更
 
 Windows 上で作業したため、以下の Swift の変更はビルド・動作確認ができていない。
@@ -20,3 +43,17 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - `webViewDidClose(_:)`：`returnURL`（なければ戻る）へ戻る
   - `webViewWebContentProcessDidTerminate(_:)`：開き直してメッセージを表示
 - 確認手順：キャンパススクエアで別ウィンドウで開くリンク（シラバス等）→ そのページの「閉じる」を押す → 元のページに戻ること。
+
+### 2026-11-24：提出済みの課題についての Moodle 通知を一覧から外す
+- 発端：Moodle の「通知」に「提出期限 …: 第7回課題」など、もう提出した課題の通知が並んでいた。
+- Windows 版で修正・実データで確認済み：通知のリンク先が `/mod/*/view.php?id=…` なら、締切と同じ
+  `moodleSubmissionStatus` でページを確かめ、提出済み・回答済みなら「提出済み・回答済みの課題の通知（N件）」に折りたたむ
+  （ホームの通知3件からも外す）。小テストの「もう一度受験する」も受験済みとして扱うよう判定語に追加。
+- Mac 版に同じ変更を入れた（**未ビルド・未確認**）：
+  - `Models/Domain.swift`：`MoodleNotice.status`・`linksToActivity`
+  - `Store/AppStore.swift`：`checkSubmissions` で通知のリンク先も確認（`defer` で控えメールの結果も通知に反映）
+  - `Views/ServicePages.swift`：通知カードを未提出／提出済みに分け、`noticeRow` を追加
+  - `Views/HomeView.swift`：提出済みの通知を出さない（`if let …, case let active = …` の書き方）
+  - `Web/Scripts.swift`：判定語に「もう一度受験する」「Re-attempt quiz」
+- 確認手順：Moodle 画面の「通知」で、提出済みの課題の「提出期限 …」が下の折りたたみに入ること。診断ログに
+  「通知のうち課題などへのリンク N件: 提出済み M件…」が出ること。

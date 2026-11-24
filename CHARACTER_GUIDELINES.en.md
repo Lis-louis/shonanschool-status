@@ -115,7 +115,7 @@ For the icon, replace `icon/campus-hub.svg` and rebuild it (see the [README](REA
 ## 6. Other
 
 - If you want to use Suzu in a way not covered here, or are unsure whether your use is allowed,
-  please ask first via [GitHub Issues](https://github.com/Lis-louis/my-school-status/issues).
+  please ask first via [GitHub Issues](https://github.com/Lis-louis/shonanschool-status/issues).
   Depending on the case, we may grant individual permission.
 - If Suzu is used in violation of these guidelines, the rights holder may request that it be taken down or deleted.
 - These guidelines may change without notice. The updated guidelines apply from the time they change.

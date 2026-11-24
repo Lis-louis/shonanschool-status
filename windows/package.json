@@ -1,7 +1,7 @@
 {
   "name": "campushub",
   "productName": "キャンパスハブ",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "湘南工科大学の Moodle・Campus Square・大学メールを1つにまとめるアプリ（Windows版）",
   "author": "キャンパスハブ",
   "license": "MIT",
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist:win": "electron-builder --win nsis --x64 --publish never && node -e \"const v=require('./package.json').version,f='CampusHub-Setup-'+v+'.exe';require('fs').copyFileSync('../dist/windows/'+f,'../'+f);console.log('作成しました: '+f)\""
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "release:win": "electron-builder --win nsis --x64 --publish always"
   },
   "build": {
     "appId": "local.campushub.app",
@@ -61,10 +62,25 @@
       ],
       "language": "1041",
       "deleteAppDataOnUninstall": false
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Lis-louis",
+        "repo": "shonanschool-status",
+        "releaseType": "release"
+      }
+    ]
   },
   "devDependencies": {
     "electron": "45.4.1",
     "electron-builder": "26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lis-louis/shonanschool-status.git"
   }
 }

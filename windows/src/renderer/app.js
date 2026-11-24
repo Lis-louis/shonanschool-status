@@ -75,6 +75,20 @@ function sampleBanner() {
   return S.prefs.useSampleData ? `<div class="banner">${icon('masks')}サンプルデータを表示中です（実際の情報ではありません）</div>` : '';
 }
 
+/** アプリの自動更新の知らせ（画面の上に出す） */
+function updateBanner() {
+  const u = S.update;
+  if (!u || V.updateHidden === u.version + u.status) return '';
+  if (u.status === 'downloading') {
+    return `<div class="updatebar"><span class="spin"></span><span class="msg">新しいバージョン ${esc(u.version)} をダウンロード中…（${Number(u.percent) || 0}%）</span>`
+      + `<button class="close" data-act="hideUpdate" title="閉じる">${icon('x')}</button></div>`;
+  }
+  return `<div class="updatebar ready"><span class="ic">${icon('sparkles')}</span>`
+    + `<span class="msg">新しいバージョン ${esc(u.version)} の準備ができました。再起動すると更新されます（数秒で起動し直します）</span>`
+    + btn(icon('refresh') + '再起動して更新', 'installUpdate', {}, 'primary') + btn('あとで', 'hideUpdate')
+    + '</div>';
+}
+
 const warnings = items => (items ?? []).map(w => statusMsg('error', w)).join('');
 
 function noticeLine(text, read) {
@@ -203,9 +217,10 @@ function homeView() {
   if (S.prefs.showNotices) {
     let body = '';
     const m = S.moodle.value;
-    if (m && m.notices.length) {
+    const activeNotices = m ? m.notices.filter(n => !SubmissionStatus.isDone(n.status)) : [];
+    if (activeNotices.length) {
       body += `<div class="sub">Moodleの通知${m.unreadCount > 0 ? chip(`未読 ${m.unreadCount}`, 'blush') : ''}</div>`;
-      body += m.notices.slice(0, 3).map(n => `<button class="plain" data-act="openMoodle" data-url="${esc(n.url ?? '')}" data-fallback="notifications">${noticeLine(n.subject, n.read)}</button>`).join('');
+      body += activeNotices.slice(0, 3).map(n => `<button class="plain" data-act="openMoodle" data-url="${esc(n.url ?? '')}" data-fallback="notifications">${noticeLine(n.subject, n.read)}</button>`).join('');
     }
     body += stateContent(S.campus, 'campus', snap => {
       const lines = snap.portlets.flatMap(p => p.lines);
@@ -304,10 +319,15 @@ function moodleView() {
   });
   const snap = S.moodle.value;
   if (snap && snap.notices.length) {
+    const row = n => `<button class="plain" data-act="openMoodle" data-url="${esc(n.url ?? '')}" data-fallback="notifications">`
+      + `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="flex:1">${noticeLine(n.subject, n.read)}</div><span class="small">${Fmt.md(n.time)}</span></div></button>`;
+    // 提出済み・回答済みの課題についての通知（「提出期限 …」など）は、一覧から外して下にまとめる
+    const active = snap.notices.filter(n => !SubmissionStatus.isDone(n.status));
+    const done = snap.notices.filter(n => SubmissionStatus.isDone(n.status));
     html += card({
       title: '通知', ic: 'bell', trail: snap.unreadCount > 0 ? `未読 ${snap.unreadCount}` : null,
-      body: snap.notices.slice(0, 10).map(n => `<button class="plain" data-act="openMoodle" data-url="${esc(n.url ?? '')}" data-fallback="notifications">`
-        + `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="flex:1">${noticeLine(n.subject, n.read)}</div><span class="small">${Fmt.md(n.time)}</span></div></button>`).join(''),
+      body: (active.length ? active.slice(0, 10).map(row).join('') : statusMsg('info', '提出が必要な課題の通知はありません。'))
+        + (done.length ? `<details><summary>提出済み・回答済みの課題の通知（${done.length}件）</summary><div class="stack">${done.map(row).join('')}</div></details>` : ''),
     });
   }
   html += card({
@@ -482,6 +502,11 @@ function settingsView() {
       + `<div class="small">通知はキャンパスハブを起動している間だけ届きます（Windowsの通知センターに出ます）。</div><div class="row">${btn('通知を試す', 'testNotification')}</div>`,
   });
   html += card({ title: 'その他', ic: 'masks', body: toggle('サンプルデータで表示を確認する', 'useSampleData') });
+  html += card({
+    title: 'アプリ', ic: 'sparkles',
+    body: `<div class="row"><span style="flex:1">バージョン ${esc(S.appVersion ?? '')}</span>${btn(icon('refresh') + 'アップデートを確認', 'checkUpdate')}</div>`
+      + '<div class="small">新しいバージョンが出ると自動でダウンロードし、画面の上に「再起動して更新」が出ます。押さずに終了しても、次に起動したときには更新されています。</div>',
+  });
   html += diagnosticsCard();
   return html;
 }
@@ -592,6 +617,7 @@ function renderNow() {
     const views = { home: homeView, calendar: calendarView, moodle: moodleView, campusSquare: campusView, mail: mailView, settings: settingsView };
     content.innerHTML = views[V.selection]();
   }
+  document.getElementById('update').innerHTML = updateBanner();
   const t = S.toast;
   document.getElementById('toast').innerHTML = t
     ? `<div class="t"><span class="ic">${icon('sparkles')}</span><span>${esc(t.text)}</span><button data-act="dismissToast">${icon('x')}</button></div>` : '';
@@ -693,6 +719,9 @@ const actions = {
     hub.act('toast', '診断ログをコピーしました');
   },
   openDiagFolder: () => hub.act('openDiagFolder'),
+  checkUpdate: () => hub.act('checkUpdate'),
+  installUpdate: () => hub.act('installUpdate'),
+  hideUpdate: () => { V.updateHidden = S.update ? S.update.version + S.update.status : null; render(); },
   dismissToast: () => hub.act('dismissToast'),
   bnav: d => hub.act('browserNav', currentService(), d.cmd),
   bmenu: (_d, el) => { const r = el.getBoundingClientRect(); hub.act('browserMenu', currentService(), r.left, r.bottom); },

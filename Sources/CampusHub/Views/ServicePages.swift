@@ -43,15 +43,19 @@ struct MoodleSummary: View {
             }
 
             if let snap = store.moodle.value, !snap.notices.isEmpty {
+                // 提出済み・回答済みの課題についての通知（「提出期限 …」など）は、一覧から外して下にまとめる
+                let active = snap.notices.filter { !$0.status.isDone }
+                let done = snap.notices.filter(\.status.isDone)
                 Card(title: "通知", symbol: "bell", trailing: snap.unreadCount > 0 ? "未読 \(snap.unreadCount)" : nil) {
-                    ForEach(snap.notices.prefix(10)) { n in
-                        Button { store.openInApp(n.url ?? c.moodleNotifications, service: .moodle) } label: {
-                            HStack(alignment: .top) {
-                                NoticeLine(text: n.subject).opacity(n.read ? 0.6 : 1)
-                                Spacer()
-                                Text(n.time.formatted(.dateTime.month().day().locale(jaLocale))).font(.caption).foregroundStyle(p.subtle)
-                            }
-                        }.buttonStyle(.plain)
+                    if active.isEmpty {
+                        StatusMessage(kind: .info, message: "提出が必要な課題の通知はありません。")
+                    }
+                    ForEach(active.prefix(10)) { n in noticeRow(n) }
+                    if !done.isEmpty {
+                        DisclosureGroup("提出済み・回答済みの課題の通知（\(done.count)件）") {
+                            ForEach(done) { n in noticeRow(n) }
+                        }
+                        .font(.system(.callout, design: .rounded)).foregroundStyle(p.subtle)
                     }
                 }
             }
@@ -91,6 +95,16 @@ struct MoodleSummary: View {
                 LinkRow(title: "通知一覧", symbol: "bell") { store.openInApp(c.moodleNotifications, service: .moodle) }
             }
         }
+    }
+
+    private func noticeRow(_ n: MoodleNotice) -> some View {
+        Button { store.openInApp(n.url ?? store.config.moodleNotifications, service: .moodle) } label: {
+            HStack(alignment: .top) {
+                NoticeLine(text: n.subject).opacity(n.read ? 0.6 : 1)
+                Spacer()
+                Text(n.time.formatted(.dateTime.month().day().locale(jaLocale))).font(.caption).foregroundStyle(p.subtle)
+            }
+        }.buttonStyle(.plain)
     }
 }
 

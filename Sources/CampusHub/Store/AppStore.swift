@@ -389,10 +389,16 @@ final class AppStore {
     /// 課題・アンケートのページを開いて提出状況を確かめ、外部フォームは Gmail の控えメールと照合する
     private func checkSubmissions(_ snap: inout MoodleSnapshot, session s: HeadlessSession, log: (String, Bool) -> Void) async {
         let targets = snap.deadlines.filter { $0.url != nil }.prefix(60)
-        guard !targets.isEmpty else { return }
+        // 通知（「提出期限 …: 第7回課題」など）も、リンク先が課題などのページなら同じように確かめる
+        let noticeIdx = snap.notices.indices.filter { snap.notices[$0].linksToActivity }
+        var urls: [String] = []
+        for u in targets.compactMap({ $0.url?.absoluteString }) + noticeIdx.compactMap({ snap.notices[$0].url?.absoluteString }) where !urls.contains(u) {
+            urls.append(u)
+        }
+        guard !urls.isEmpty else { return }
         struct R: Decodable { let url: String; let status: String; let hit: String; let form: String? }
         do {
-            let raw = try await s.run(Scripts.moodleSubmissionStatus, args: ["urls": targets.compactMap { $0.url?.absoluteString }], world: .page)
+            let raw = try await s.run(Scripts.moodleSubmissionStatus, args: ["urls": urls], world: .page)
             guard let json = raw as? String, let results = try? JSONDecoder().decode([R].self, from: Data(json.utf8)) else {
                 log("提出状況の確認: 結果を読めませんでした", false); return
             }
@@ -402,14 +408,29 @@ final class AppStore {
                 snap.deadlines[i].status = SubmissionStatus(rawValue: r.status) ?? .unknown
                 snap.deadlines[i].formURL = r.form.flatMap(SafeURL.https)
             }
+            for i in noticeIdx {
+                guard let u = snap.notices[i].url?.absoluteString, let r = byURL[u] else { continue }
+                snap.notices[i].status = SubmissionStatus(rawValue: r.status) ?? .unknown
+            }
             // 何の文言で判定したかを集計してログに残す（内容は残さない）
             let summary = Dictionary(grouping: results, by: { "\($0.status):\($0.hit)" }).map { "\($0.key)×\($0.value.count)" }.sorted()
             log("提出状況の確認 \(results.count)件: " + summary.joined(separator: " / "), true)
+            if !noticeIdx.isEmpty {
+                let doneN = noticeIdx.filter { snap.notices[$0].status.isDone }.count
+                log("通知のうち課題などへのリンク \(noticeIdx.count)件: 提出済み \(doneN)件を「提出済みの通知」にまとめます", true)
+            }
         } catch {
             log("提出状況の確認に失敗: \(error.localizedDescription)", false)
             return
         }
 
+        // 同じ課題の締切が「控えメールあり」になったら、その通知も回答済みにする（関数を抜けるときに反映）
+        defer {
+            let receipted = Set(snap.deadlines.filter { $0.status == .formReceipt }.compactMap { $0.url?.absoluteString })
+            for i in noticeIdx where snap.notices[i].url.map({ receipted.contains($0.absoluteString) }) ?? false {
+                snap.notices[i].status = .formReceipt
+            }
+        }
         // 外部フォーム：Gmail に Google フォームの控えがあれば回答済みとみなす
         let forms = snap.deadlines.indices.filter { snap.deadlines[$0].status == .form }
         guard !forms.isEmpty, googleSignedIn else { return }

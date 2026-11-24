@@ -6,6 +6,7 @@ const path = require('node:path');
 const { app, BrowserWindow, Menu, ipcMain, shell, clipboard, dialog, nativeTheme } = require('electron');
 const { AppStore } = require('./store');
 const { BrowserController } = require('./browser');
+const { Updater } = require('./updater');
 const { appSession } = require('./web');
 const { SafeURL, Urls } = require('./config');
 
@@ -30,6 +31,7 @@ if (!app.requestSingleInstanceLock()) {
 
 let win = null;
 let store = null;
+let updater = null;
 /** 画面上でブラウザを表示する場所（renderer が知らせる） */
 let browserPlacement = null;
 
@@ -94,6 +96,7 @@ function buildMenu() {
       label: 'ファイル',
       submenu: [
         { label: '更新', accelerator: 'CmdOrCtrl+R', click: () => store.refresh() },
+        { label: 'アプリのアップデートを確認', click: () => updater.check(true) },
         { type: 'separator' },
         { label: '診断ログのフォルダを開く', click: () => shell.showItemInFolder(require('./store').DiagFile.path) },
         { type: 'separator' },
@@ -189,6 +192,8 @@ function registerIPC() {
     testNotification: () => store.testNotification(),
     copyText: t => { clipboard.writeText(String(t ?? '')); },
     toast: t => store.setToast(String(t ?? '')),
+    checkUpdate: () => updater.check(true),
+    installUpdate: () => updater.install(),
     openDiagFolder: () => shell.showItemInFolder(require('./store').DiagFile.path),
     /** 既定のブラウザで開く（https / mailto だけ） */
     openExternal: url => {
@@ -252,6 +257,7 @@ function registerIPC() {
 
 function start() {
   store = new AppStore();
+  updater = new Updater(store);
   setupDownloads();
   buildMenu();
   registerIPC();
@@ -260,6 +266,7 @@ function start() {
     win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#0F1530' : '#F6F8FF');
   });
   store.refresh();
+  updater.start();
 }
 
 app.on('window-all-closed', () => app.quit());

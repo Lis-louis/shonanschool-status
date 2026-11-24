@@ -68,3 +68,6 @@ build/
 # 配布用のインストーラー（scripts/build-pkg.sh / build-windows.sh）
 dist/
 RFMT/
+
+# Windows 版のインストーラーは GitHub Releases で配る（リポジトリには入れない）
+/CampusHub-Setup-*.exe

@@ -98,12 +98,13 @@ struct HomeView: View {
 
     private var notices: some View {
         Card(title: "大学からのお知らせ", symbol: "megaphone") {
-            if let m = store.moodle.value, !m.notices.isEmpty {
+            // 提出済み・回答済みの課題についての通知は出さない
+            if let m = store.moodle.value, case let active = m.notices.filter({ !$0.status.isDone }), !active.isEmpty {
                 HStack {
                     Text("Moodleの通知").font(.system(.subheadline, design: .rounded).weight(.semibold)).foregroundStyle(p.ink)
                     if m.unreadCount > 0 { Chip(text: "未読 \(m.unreadCount)", color: p.blush) }
                 }
-                ForEach(m.notices.prefix(3)) { n in
+                ForEach(active.prefix(3)) { n in
                     Button { store.openInApp(n.url ?? store.config.moodleNotifications, service: .moodle) } label: {
                         NoticeLine(text: n.subject).opacity(n.read ? 0.6 : 1)
                     }.buttonStyle(.plain)
