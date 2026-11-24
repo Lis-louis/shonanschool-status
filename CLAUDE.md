@@ -55,7 +55,7 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - `Models/Domain.swift`：`MoodleNotice.status`・`linksToActivity`
   - `Store/AppStore.swift`：`checkSubmissions` で通知のリンク先も確認（`defer` で控えメールの結果も通知に反映）
   - `Views/ServicePages.swift`：通知カードを未提出／提出済みに分け、`noticeRow` を追加
-  - `Views/HomeView.swift`：提出済みの通知を出さない（`if let …, case let active = …` の書き方）
+  - `Views/HomeView.swift`：提出済みの通知を出さない（`activeNotices` を追加）
   - `Web/Scripts.swift`：判定語に「もう一度受験する」「Re-attempt quiz」
 - 確認手順：Moodle 画面の「通知」で、提出済みの課題の「提出期限 …」が下の折りたたみに入ること。診断ログに
   「通知のうち課題などへのリンク N件: 提出済み M件…」が出ること。

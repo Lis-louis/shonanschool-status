@@ -16,6 +16,8 @@ class Updater {
     this.au = null;
     /** メニュー・設定から手動で確認したとき（結果をトーストで知らせる） */
     this.manual = false;
+    /** ダウンロード済みで「再起動して更新」を待っている版（さらに新しい版の取得に失敗したら、こちらの表示に戻す） */
+    this.ready = null;
   }
 
   /** 配布版（インストールしたもの）だけ。開発中（npm start）は確認しない */
@@ -30,6 +32,7 @@ class Updater {
     autoUpdater.logger = null;
 
     autoUpdater.on('update-available', i => {
+      if (this.ready?.version === i.version) return; // もうダウンロード済みの版（表示はそのまま）
       this.set({ status: 'downloading', version: i.version, percent: 0 });
       this.store.diag('アプリ', `新しいバージョン ${i.version} が見つかりました。ダウンロードします`);
     });
@@ -39,7 +42,8 @@ class Updater {
       if (u?.status === 'downloading' && u.percent !== percent) this.set({ ...u, percent });
     });
     autoUpdater.on('update-downloaded', i => {
-      this.set({ status: 'ready', version: i.version });
+      this.ready = { status: 'ready', version: i.version };
+      this.set(this.ready);
       this.store.diag('アプリ', `新しいバージョン ${i.version} の準備ができました`);
       this.manual = false;
     });
@@ -51,7 +55,7 @@ class Updater {
       const msg = String(e?.message ?? e).split('\n')[0].slice(0, 200);
       this.store.diag('アプリ', `アップデートの確認・ダウンロードに失敗: ${msg}`, false);
       if (this.manual) this.store.setToast('アップデートを確認できませんでした（インターネット接続を確認してください）');
-      if (this.store.update?.status === 'downloading') this.set(null);
+      if (this.store.update?.status === 'downloading') this.set(this.ready);
       this.manual = false;
     });
 
@@ -65,9 +69,14 @@ class Updater {
       return;
     }
     const st = this.store.update?.status;
-    if (st === 'ready' || st === 'downloading') {
-      if (manual) this.store.setToast(st === 'ready' ? '新しいバージョンの準備ができています。「再起動して更新」を押してください' : '新しいバージョンをダウンロード中です');
+    if (st === 'downloading') {
+      if (manual) this.store.setToast('新しいバージョンをダウンロード中です');
       return;
+    }
+    if (st === 'ready') {
+      // 「再起動して更新」を押さずに使い続けている間に、さらに新しい版が出ていないかも裏で確かめる
+      if (manual) this.store.setToast('新しいバージョンの準備ができています。「再起動して更新」を押してください');
+      manual = false;
     }
     this.manual = manual;
     this.au.checkForUpdates().catch(() => {}); // 失敗は 'error' で扱う
