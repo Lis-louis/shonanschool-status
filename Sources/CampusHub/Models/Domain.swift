@@ -135,14 +135,52 @@ struct Timetable: Codable, Hashable, Sendable {
         }
     }
 
-    /// 科目名を比べやすくする：全角→半角、【担当】・[曜限]・「後学期_」などの前置き・空白を除く
+    /// 科目名を比べやすくする：全角→半角、カタカナ→ひらがな、【担当】・[曜限]・「後学期_」などの前置き・空白を除く
     static func courseKey(_ s: String) -> String {
-        s.precomposedStringWithCompatibilityMapping
+        let k = s.precomposedStringWithCompatibilityMapping
             .replacingOccurrences(of: "【[^】]*】", with: "", options: .regularExpression)
             .replacingOccurrences(of: "\\[[^\\]]*\\]", with: "", options: .regularExpression)
             .replacingOccurrences(of: "^\\s*(前学期|後学期|通年活動|通年)_", with: "", options: .regularExpression)
             .replacingOccurrences(of: "[\\s_]", with: "", options: .regularExpression)
             .lowercased()
+        // カタカナ（ァ〜ヶ）だけをひらがなにする（長音「ー」などはそのまま。Windows 版と同じ）
+        return String(String.UnicodeScalarView(k.unicodeScalars.map { u in
+            (0x30A1...0x30F6).contains(u.value) ? Unicode.Scalar(u.value - 0x60)! : u
+        }))
+    }
+
+    /// 2つの科目名の似ている度合い（0〜1、2文字ずつの組の重なり）。「心理をよむ」と「心理を読む」のような表記ゆれ用
+    static func similarity(_ a: String, _ b: String) -> Double {
+        func grams(_ s: String) -> [String] {
+            let c = Array(s)
+            return c.count < 2 ? [] : (0..<(c.count - 1)).map { String(c[$0...$0 + 1]) }
+        }
+        let ga = grams(a)
+        var rest = grams(b)
+        guard !ga.isEmpty, !rest.isEmpty else { return 0 }
+        let total = ga.count + rest.count
+        var hit = 0
+        for g in ga { if let i = rest.firstIndex(of: g) { hit += 1; rest.remove(at: i) } }
+        return Double(2 * hit) / Double(total)
+    }
+
+    /// 英数字の部分（「基礎1」の 1、「実習B」の b、「I」など）。ここが違えば別の科目とみなす
+    private static func alnum(_ s: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: "[a-z0-9]+") else { return "" }
+        return re.matches(in: s, range: NSRange(s.startIndex..., in: s))
+            .compactMap { Range($0.range, in: s).map { String(s[$0]) } }.joined(separator: ",")
+    }
+
+    /// 対応するコースが見つからないときに開く、Moodle のコース検索（科目名で探す）
+    static func searchURL(base: String, text: String) -> URL? {
+        let b = base.replacingOccurrences(of: "/+$", with: "", options: .regularExpression)
+        let q = split(text).title.precomposedStringWithCompatibilityMapping
+            .replacingOccurrences(of: "【[^】]*】", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        guard b.lowercased().hasPrefix("https://"), !q.isEmpty, var c = URLComponents(string: b + "/course/search.php") else { return nil }
+        c.queryItems = [URLQueryItem(name: "search", value: q)]
+        return c.url
     }
 
     /// 時間割のコマに対応する Moodle のコース（Windows版 logic.js の Timetable.moodleCourse と同じ規則）。
@@ -164,13 +202,20 @@ struct Timetable: Codable, Hashable, Sendable {
             var s = 0
             if let code = parts.code, code.count >= 6, short.contains(code) || full.contains(code) { s += 10 }
             let ck = courseKey(c.fullName)
-            if key.count >= 2, ck == key { s += 6 }
-            else if min(key.count, ck.count) >= 3, ck.contains(key) || key.contains(ck) { s += 3 }
-            if s == 0 { continue }
+            var samePeriod = false
             if let r = full.range(of: "\\[(.)(\\d+)", options: .regularExpression) {
                 let tag = full[r].dropFirst()  // 例: "火1"
-                if let d = tag.first, String(d) == day, String(tag.dropFirst()) == per { s += 2 }
+                if let d = tag.first, String(d) == day, String(tag.dropFirst()) == per { samePeriod = true }
             }
+            if key.count >= 2, ck == key { s += 6 }
+            else if min(key.count, ck.count) >= 3, ck.contains(key) || key.contains(ck) { s += 3 }
+            else if alnum(key) == alnum(ck) {
+                // 表記ゆれ（ひらがな／漢字、副題の有無など）。「基礎1」と「基礎2」、「実習A」と「実習B」のように英数字が違うものは別の科目とみなす
+                let sim = similarity(key, ck)
+                if sim >= 0.75 { s += 4 } else if sim >= 0.5 { s += 3 } else if sim >= 0.3, samePeriod { s += 2 }
+            }
+            if s == 0 { continue }
+            if samePeriod { s += 2 }
             if full.contains(term) { s += 1 }
             else if full.contains("前学期") || full.contains("後学期") { s -= 3 }
             if s >= 3, s > bestScore { best = c; bestScore = s }

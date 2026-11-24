@@ -105,9 +105,12 @@ function classCell(period, text, day) {
     + `<div class="name">${esc(p.title)}${tag}</div>${p.rest.slice(0, 3).map(l => `<div class="small">${esc(l)}</div>`).join('')}`
     + `${p.code ? `<div class="code">${esc(p.code)}</div>` : ''}</div>`
     + (course ? `<span class="tomoodle">${icon('book')}Moodle${icon('right')}</span>` : '') + '</div>';
-  return course
-    ? `<button class="plain" data-act="openMoodle" data-url="${esc(course.url)}" title="Moodleの「${esc(course.fullName)}」を開く">${cell}</button>`
-    : cell;
+  if (course) return `<button class="plain" data-act="openMoodle" data-url="${esc(course.url)}" title="Moodleの「${esc(course.fullName)}」を開く">${cell}</button>`;
+  // 対応するコースが見つからないとき（Moodle に登録されていない・名前が大きく違う）は、Moodle のコース検索を科目名で開く
+  const search = day ? Timetable.searchURL(S.config.moodleBaseURL, text) : null;
+  if (!search) return cell;
+  const searchCell = cell.replace(/<\/div>$/, `<span class="tomoodle search">${icon('compass')}Moodleで探す</span></div>`).replace('class="classcell', 'class="classcell linked');
+  return `<button class="plain" data-act="openMoodle" data-url="${esc(search)}" title="対応するコースが見つからないので、Moodle で「${esc(p.title)}」を検索します">${searchCell}</button>`;
 }
 
 function deadlineRow(d) {

@@ -247,5 +247,22 @@ test('時間割のコマから Moodle のコースを見つける', () => {
   assert.equal(find('B30A02K1\n共通基盤ワークショップ１Ｂ ～社会問題を解決に導く工学とは～【担当F】', '月', '2限'), 877);
   // 対応するコースがなければ null
   assert.equal(find('X99Z99K1\n存在しない科目【担当G】', '水', '1限'), null);
+  // 表記ゆれ（ひらがな／漢字、カタカナ／ひらがな）でも見つける。コードが違っても OK
+  const more = [
+    [2001, '【工・情】後学期_心理を読む[水2]', '後学期_心理を読む-70X001K101'],
+    [2002, '【情】後学期_ＩＴ演習基礎２（メ）[木4]', '後学期_ＩＴ演習基礎２（メ）-B31R02K101'],
+    [2003, '【情】後学期_データ分析ゼミ[金2]', 'x'],
+    [2004, '【情】後学期_情報学実習Ａ[金3]', 'x'],
+  ].map(([id, fullName, shortName]) => ({ id, fullName, shortName, url: `https://m.example/course/view.php?id=${id}` }));
+  const find2 = (text, day, per) => T.moodleCourse(more, text, day, per, now)?.id ?? null;
+  assert.equal(find2('B30X01K1\n心理をよむ【担当H】', '水', '2限'), 2001);
+  assert.equal(find2('B30Y01K1\nでーた分析ゼミ【担当I】', '金', '2限'), 2003);
+  // 英数字が違う科目（基礎1 と 基礎2、実習A と 実習B）は結び付けない
+  assert.equal(find2('B31R01K1\nＩＴ演習基礎１（メ）【担当J】', '火', '4限'), null);
+  assert.equal(find2('B31M02K1\n情報学実習Ｂ【担当K】', '金', '3限'), null);
+  // 見つからないときは Moodle のコース検索（担当は除く）
+  assert.equal(T.searchURL('https://m.example/', 'B30X01K1\n心理をよむ【担当H】\n担当 H'),
+    'https://m.example/course/search.php?search=' + encodeURIComponent('心理をよむ'));
+  assert.equal(T.searchURL('', '心理をよむ'), null);
   assert.equal(T.moodleCourse(null, 'B31L07K1\nプログラミング実習', '火', '1限', now), null);
 });

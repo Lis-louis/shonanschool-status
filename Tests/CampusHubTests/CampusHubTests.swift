@@ -246,6 +246,25 @@ import Testing
     @Test func noMatchIsNil() {
         #expect(find("X99Z99K1\n存在しない科目【担当G】", "水", "1限") == nil)
     }
+    @Test func spellingVariantsMatchButDifferentNumbersDoNot() {
+        let more: [Course] = [
+            (2001, "【工・情】後学期_心理を読む[水2]"),
+            (2002, "【情】後学期_ＩＴ演習基礎２（メ）[木4]"),
+            (2004, "【情】後学期_情報学実習Ａ[金3]"),
+        ].map { Course(id: $0.0, fullName: $0.1, shortName: "x", category: nil, progress: nil,
+                       url: URL(string: "https://m.example/course/view.php?id=\($0.0)")) }
+        func f(_ t: String, _ d: String, _ p: String) -> Int? {
+            Timetable.moodleCourse(in: more, text: t, day: d, period: p, now: now)?.id
+        }
+        #expect(f("B30X01K1\n心理をよむ【担当H】", "水", "2限") == 2001)
+        #expect(f("B31R01K1\nＩＴ演習基礎１（メ）【担当J】", "火", "4限") == nil)
+        #expect(f("B31M02K1\n情報学実習Ｂ【担当K】", "金", "3限") == nil)
+    }
+    @Test func searchURLWhenNotFound() {
+        #expect(Timetable.searchURL(base: "https://m.example/", text: "B30X01K1\n心理をよむ【担当H】")?.absoluteString
+                == "https://m.example/course/search.php?search=%E5%BF%83%E7%90%86%E3%82%92%E3%82%88%E3%82%80")
+        #expect(Timetable.searchURL(base: "", text: "心理をよむ") == nil)
+    }
 }
 
 @Suite struct ClosedEventTests {

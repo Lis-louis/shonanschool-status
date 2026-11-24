@@ -61,12 +61,29 @@ const Timetable = {
     return tt.periods.map(p => ({ period: p.label, text: String(p.byDay[day] ?? '').trim() }))
       .filter(c => c.text && c.text !== '-' && c.text !== '－');
   },
-  /** 科目名を比べやすくする：全角→半角、【担当】・[曜限]・「後学期_」などの前置き・空白を除く */
+  /** 科目名を比べやすくする：全角→半角、カタカナ→ひらがな、【担当】・[曜限]・「後学期_」などの前置き・空白を除く */
   courseKey(s) {
     return String(s ?? '').normalize('NFKC')
       .replace(/【[^】]*】/g, '').replace(/\[[^\]]*\]/g, '')
       .replace(/^\s*(前学期|後学期|通年活動|通年)_/, '')
-      .replace(/[\s_]/g, '').toLowerCase();
+      .replace(/[\s_]/g, '').toLowerCase()
+      .replace(/[\u30a1-\u30f6]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+  },
+  /** 2つの科目名の似ている度合い（0〜1、2文字ずつの組の重なり）。「心理をよむ」と「心理を読む」のような表記ゆれ用 */
+  similarity(a, b) {
+    const grams = s => { const g = []; for (let i = 0; i < s.length - 1; i++) g.push(s.slice(i, i + 2)); return g; };
+    const ga = grams(a), gb = grams(b);
+    if (!ga.length || !gb.length) return 0;
+    const rest = [...gb];
+    let hit = 0;
+    for (const g of ga) { const i = rest.indexOf(g); if (i >= 0) { hit++; rest.splice(i, 1); } }
+    return (2 * hit) / (ga.length + gb.length);
+  },
+  /** 対応するコースが見つからないときに開く、Moodle のコース検索（科目名で探す） */
+  searchURL(base, text) {
+    const b = String(base ?? '').replace(/\/+$/, '');
+    const q = String(Timetable.split(text).title).normalize('NFKC').replace(/【[^】]*】/g, '').replace(/\s+/g, ' ').trim();
+    return /^https:\/\//i.test(b) && q ? `${b}/course/search.php?search=${encodeURIComponent(q)}` : null;
   },
   /** 時間割のコマに対応する Moodle のコース。見つからなければ null。
    *  ① 科目コード（時間割の B31L07K1 → Moodle の短縮名 …-B31L07K101）② 科目名 の順に強く見て、
@@ -85,11 +102,19 @@ const Timetable = {
       let s = 0;
       if (code && code.length >= 6 && (short.includes(code) || full.includes(code))) s += 10;
       const ck = Timetable.courseKey(c.fullName);
+      const dp = full.match(/\[(.)(\d+)/);
+      const samePeriod = !!dp && dp[1] === day && dp[2] === per;
       if (key.length >= 2 && ck === key) s += 6;
       else if (Math.min(key.length, ck.length) >= 3 && (ck.includes(key) || key.includes(ck))) s += 3;
+      else if (alnum(key) === alnum(ck)) {
+        // 表記ゆれ（ひらがな／漢字、副題の有無など）。「基礎1」と「基礎2」、「実習A」と「実習B」のように英数字が違うものは別の科目とみなす
+        const sim = Timetable.similarity(key, ck);
+        if (sim >= 0.75) s += 4;
+        else if (sim >= 0.5) s += 3;
+        else if (sim >= 0.3 && samePeriod) s += 2;
+      }
       if (s === 0) continue;
-      const dp = full.match(/\[(.)(\d+)/);
-      if (dp && dp[1] === day && dp[2] === per) s += 2;
+      if (samePeriod) s += 2;
       if (full.includes(term)) s += 1;
       else if (/前学期|後学期/.test(full)) s -= 3;
       if (s >= 3 && s > bestScore) { best = c; bestScore = s; }
@@ -97,6 +122,9 @@ const Timetable = {
     return best;
   },
 };
+
+/** 英数字の部分（「基礎1」の 1、「実習B」の b、「I」など）。ここが違えば別の科目とみなす */
+const alnum = s => (String(s).match(/[a-z0-9]+/g) || []).join(',');
 
 const SubmissionStatus = {
   label: s => ({ submitted: '提出済み', notOpenYet: '受付開始前', form: 'フォーム（提出は要確認）', formReceipt: 'フォーム回答済み（控えメールあり）' }[s] ?? null),

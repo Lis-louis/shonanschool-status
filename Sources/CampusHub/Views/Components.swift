@@ -179,7 +179,8 @@ func remainingText(_ date: Date, now: Date = .now) -> String {
 }
 
 /// 時間割の1コマ（1行目＝科目名、2行目以降＝担当・教室など）。
-/// day を渡すと対応する Moodle のコースを探し、見つかれば押すとそのコースをアプリ内で開く
+/// day を渡すと対応する Moodle のコースを探し、見つかれば押すとそのコースをアプリ内で開く。
+/// 見つからないとき（Moodle に登録されていない・名前が大きく違う）は、押すと Moodle のコース検索を科目名で開く
 struct ClassCell: View {
     @Environment(AppStore.self) private var store
     @Environment(\.palette) private var p
@@ -195,12 +196,16 @@ struct ClassCell: View {
             Button { store.openInApp(course.url, service: .moodle) } label: { cell(linked: true) }
                 .buttonStyle(.plain)
                 .help("Moodleの「\(course.fullName)」を開く")
+        } else if day != nil, let search = Timetable.searchURL(base: store.config.moodleBaseURL, text: text) {
+            Button { store.openInApp(search, service: .moodle) } label: { cell(linked: true, search: true) }
+                .buttonStyle(.plain)
+                .help("対応するコースが見つからないので、Moodle で「\(Timetable.split(text).title)」を検索します")
         } else {
             cell(linked: false)
         }
     }
 
-    private func cell(linked: Bool) -> some View {
+    private func cell(linked: Bool, search: Bool = false) -> some View {
         let parts = Timetable.split(text)
         let important = Importance.isImportant(text)
         return HStack(alignment: .top, spacing: 12) {
@@ -219,9 +224,10 @@ struct ClassCell: View {
             }
             Spacer(minLength: 0)
             if linked {
-                Label("Moodle", systemImage: "book.closed").font(.caption2).foregroundStyle(p.accent)
+                Label(search ? "Moodleで探す" : "Moodle", systemImage: search ? "magnifyingglass" : "book.closed")
+                    .font(.caption2).foregroundStyle(search ? p.subtle : p.accent)
                     .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(p.accent.opacity(0.12), in: Capsule())
+                    .background((search ? p.subtle : p.accent).opacity(0.12), in: Capsule())
                     .frame(maxHeight: .infinity)
             }
         }

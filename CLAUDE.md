@@ -73,6 +73,9 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
 - Windows 版で実装・実データで確認済み（0.3.2）：`logic.js` の `Timetable.moodleCourse`。
   科目コード（時間割 `B31L07K1` ⇔ Moodle 短縮名 `…-B31L07K101`）→ 科目名（【担当】・[曜限]・学期・全角半角を無視）の順に照合し、
   同名が複数なら曜限と今の学期で選ぶ。実際の時間割16コマすべてが正しいコースに対応した。
+  表記ゆれ（「心理をよむ」⇔「心理を読む」、カタカナ⇔ひらがな）は2文字組の似ている度合いで拾う。英数字が違う（基礎1⇔基礎2、実習A⇔実習B）ものは結び付けない。
+  対応するコースが無いときは「Moodleで探す」＝ `course/search.php?search=科目名` を開く（他の学生の時間割でも必ず押せるように）。
+  正しいコースを抜いた一覧で試し、16コマとも別のコースに誤って結び付かないことを確認済み。
 - Mac 版に同じ変更を入れた：
   - `Models/Domain.swift`：`Timetable.courseKey`・`Timetable.moodleCourse(in:text:day:period:)`
     → **Windows の swiftc でこのファイルだけコンパイル・実行し、Windows 版と同じ結果になることは確認済み**
