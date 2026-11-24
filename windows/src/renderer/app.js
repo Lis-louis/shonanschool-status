@@ -1,9 +1,10 @@
 'use strict';
-/* global icon, esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus,
+/* global hub, icon, esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus,
    MailCategory, todos, calendarItems, validURL, isPlaceholder, gmailURL */
 // 画面（Mac版の SwiftUI の各 View と同じ構成）。状態はメインプロセスから受け取り、操作は hub.act() で送る。
 
-const hub = window.hub;
+// hub は preload.js の contextBridge が window.hub として渡す（書き換え不可のプロパティ）。
+// ここで `const hub` と宣言し直すと SyntaxError になり画面が真っ白になるので、宣言せずにそのまま使う。
 let S = null; // メインプロセスの状態
 let ART = {};
 const V = { // 画面だけの状態
