@@ -141,16 +141,19 @@ function toggle(text, key, { disabled = false, small = false, view = false } = {
 
 // MARK: - やること・メール
 
-function todoCard(onlySource, limit = 30) {
+function todoCard(onlySource, limit = 30, { thisWeek = false } = {}) {
   const key = onlySource ?? 'all';
   const showDone = !!V.showDone[key];
   const done = new Set(S.doneIDs);
-  const all = todos(S, showDone).filter(t => !onlySource || t.source === onlySource);
+  const all = todos(S, showDone, Date.now(), { thisWeek }).filter(t => !onlySource || t.source === onlySource);
+  // 今週の分だけにしたとき、出さなかった件数（Moodle 画面の「課題・締切」で見られる）
+  const later = thisWeek ? todos(S, showDone).filter(t => !onlySource || t.source === onlySource).length - all.length : 0;
   const hot = all.filter(t => !done.has(t.id) && (t.overdueHint || (t.due != null && t.due < Date.now() + 86400e3))).length;
   let body = '';
   if (hot > 0) body += `<div class="hot-label">${icon('alertCircle')}期限切れ・督促・24時間以内が ${hot} 件</div>`;
   if (!all.length) body += statusMsg('info', '今のところ、やることは見つかっていません。');
   body += all.slice(0, limit).map(todoRow).join('');
+  if (later > 0) body += `<button class="plain small laterlink" data-act="go" data-s="moodle">${icon('clock')}あと8日以上先・受付開始前の課題 ${later}件は、Moodle の「課題・締切」で見られます${icon('right')}</button>`;
   body += `<label class="switch"><input type="checkbox" data-showdone="${key}" ${showDone ? 'checked' : ''}><span class="small">完了にしたものも表示</span></label>`;
   return card({ title: onlySource === 'mail' ? 'メールで見つけたやること' : 'やること（まだできていないこと）', ic: 'checklist', tinted: hot > 0, trail: `${all.length}件`, body });
 }
@@ -217,7 +220,7 @@ function homeView() {
     if ((S.moodle.state === 'loading' || S.mail.state === 'loading') && todos(S).length === 0) {
       html += card({ title: 'やること（まだできていないこと）', ic: 'checklist', body: statusMsg('loading', 'Moodleとメールから読み込み中…') });
     } else {
-      html += todoCard(null, 6);
+      html += todoCard(null, 6, { thisWeek: true });
       if (S.moodle.state === 'failed') html += statusMsg('error', 'Moodle：' + S.moodle.message, { retry: true, loginService: 'moodle' });
       if (S.moodle.state === 'notConfigured') html += statusMsg('notConfigured', 'Moodle：' + S.moodle.message, { settings: true, loginService: 'moodle' });
     }

@@ -145,10 +145,13 @@ struct TodoCard: View {
     @Environment(\.palette) private var p
     var onlySource: TodoItem.Source?
     var limit = 30
+    /// ホーム：今週の分だけ（受付開始前・あと8日以上先は出さない）
+    var thisWeek = false
     @State private var showDone = false
 
     var body: some View {
-        let all = store.todos(includeDone: showDone).filter { onlySource == nil || $0.source == onlySource }
+        let all = store.todos(includeDone: showDone, thisWeek: thisWeek).filter { onlySource == nil || $0.source == onlySource }
+        let later = thisWeek ? store.todos(includeDone: showDone).filter { onlySource == nil || $0.source == onlySource }.count - all.count : 0
         let hot = all.filter { !store.doneIDs.contains($0.id) && ($0.overdueHint || ($0.due.map { $0 < .now.addingTimeInterval(86400) } ?? false)) }.count
         Card(title: onlySource == .mail ? "メールで見つけたやること" : "やること（まだできていないこと）", symbol: "checklist",
              tint: hot > 0 ? p.alert : nil, trailing: "\(all.count)件") {
@@ -160,6 +163,12 @@ struct TodoCard: View {
                 StatusMessage(kind: .info, message: "今のところ、やることは見つかっていません。")
             }
             ForEach(all.prefix(limit)) { TodoRow(item: $0) }
+            if later > 0 {
+                Button { store.selection = .moodle; store.moodleMode = .summary } label: {
+                    Label("あと8日以上先・受付開始前の課題 \(later)件は、Moodle の「課題・締切」で見られます", systemImage: "clock")
+                        .font(.caption).foregroundStyle(p.subtle)
+                }.buttonStyle(.plain)
+            }
             Toggle("完了にしたものも表示", isOn: $showDone).toggleStyle(.switch).tint(p.accent).font(.caption)
         }
     }

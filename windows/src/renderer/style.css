@@ -158,6 +158,8 @@ select.input { padding: 7px 12px; width: auto; }
 .classcell.important { background: color-mix(in srgb, var(--alert) 8%, transparent); }
 .classcell .p { width: 44px; flex: none; font-weight: 700; color: var(--accent); }
 .classcell .name { font-weight: 700; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.laterlink { display: flex; align-items: center; gap: 6px; color: var(--subtle); padding: 4px 2px; }
+.laterlink:hover { color: var(--accent); }
 .classcell.linked { cursor: pointer; transition: background .15s; }
 .classcell.linked:hover { background: color-mix(in srgb, var(--tint) 85%, transparent); }
 .classcell .tomoodle { flex: none; align-self: center; display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--accent);

@@ -149,12 +149,63 @@ function moodleURL(S, p) {
   return /^https:\/\//i.test(b) ? b + p : null;
 }
 
-/** Moodle の未完了課題 ＋ メールで見つけた要対応 */
-function todos(S, includeDone = false, now = Date.now()) {
+// MARK: - 今週の分だけにする（ホームの「やること」）
+
+/** 授業は週1回なので、ホームの「やること」に出す Moodle の締切は「あと7日」まで */
+const WEEK_DAYS = 7;
+
+/** 文の中の日付（「12/2(水)」「12月2日」「2026/12/2」）。年が無ければ now に近い年にする。見つからなければ null */
+function guessDate(text, now = Date.now()) {
+  const m = String(text ?? '').normalize('NFKC').match(/(?:(\d{4})\s*[\/年.-]\s*)?(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?/);
+  if (!m) return null;
+  const mon = Number(m[2]) - 1, day = Number(m[3]);
+  if (mon < 0 || mon > 11 || day < 1 || day > 31) return null;
+  if (m[1]) return new Date(Number(m[1]), mon, day).getTime();
+  const y = new Date(now).getFullYear();
+  const cands = [y - 1, y, y + 1].map(yy => new Date(yy, mon, day).getTime());
+  return cands.reduce((a, b) => (Math.abs(b - now) < Math.abs(a - now) ? b : a));
+}
+
+/** Campus Square で見つけた休講（休講ページの表の行と、ポータルのお知らせのうち「休講」を含む行）。[{ text, date }] */
+function cancellations(S, now = Date.now()) {
+  const c = S.campus.value;
+  if (!c) return [];
+  const lines = [
+    ...(c.cancellations?.rows ?? []).map(r => r.filter(Boolean).join(' ')),
+    ...(c.portlets ?? []).flatMap(p => p.lines ?? []),
+  ];
+  return lines.filter(l => /休講/.test(l)).map(text => ({ text, date: guessDate(text, now) })).filter(x => x.date != null);
+}
+
+/** 締切の科目に、今日から締切までの間の休講があるか（「来週は休講なので2週間前から出ている課題」）。あればその休講 */
+function cancelledBefore(course, due, list, now = Date.now()) {
+  // 科目名から【】・[曜限]・学期・（メ）などのかっこを除いた中心の名前で、休講の行に含まれるかを見る
+  const core = Timetable.courseKey(course).replace(/\([^)]*\)/g, '');
+  if (core.length < 3) return null;
+  const start = startOfDay(now);
+  return list.find(x => x.date >= start && x.date <= due
+    && Timetable.courseKey(x.text).replace(/\([^)]*\)/g, '').includes(core)) ?? null;
+}
+
+/** Moodle の未完了課題 ＋ メールで見つけた要対応。
+ *  thisWeek: true（ホーム）のときは、受付開始前のものと、あと8日以上先のものを出さない。
+ *  ただし先の締切でも、もう提出できるもの・締切までに休講があるもの（早めに出ている課題）は出す */
+function todos(S, includeDone = false, now = Date.now(), { thisWeek = false } = {}) {
   const done = new Set(S.doneIDs);
   const items = [];
+  const cancels = thisWeek ? cancellations(S, now) : [];
   for (const d of S.moodle.value?.deadlines ?? []) {
     if (SubmissionStatus.isDone(d.status)) continue;
+    let early = null;
+    if (thisWeek) {
+      if (d.status === 'notOpenYet') continue;
+      if (Math.floor((d.due - now) / DAY) > WEEK_DAYS) {
+        const c = d.course ? cancelledBefore(d.course, d.due, cancels, now) : null;
+        if (c) early = `締切は先ですが、${Fmt.md(c.date)}が休講なので早めに出ている課題です`;
+        else if (d.status === 'notSubmitted' || d.status === 'form') early = '締切は先ですが、もう提出できます（早めに出ている課題）';
+        else continue;
+      }
+    }
     const overdue = d.due < now;
     let reason;
     if (d.status === 'form') reason = '外部フォームです。提出したかはアプリから分からないので、済んだらチェックしてください';
@@ -162,6 +213,7 @@ function todos(S, includeDone = false, now = Date.now()) {
     else if (d.status === 'notOpenYet') reason = 'まだ受付が始まっていません（開始されたら取り組む）';
     else if (!d.needsAction) reason = 'Moodleの予定にある締切（提出済みかは未確認）';
     else reason = overdue ? '期限を過ぎていますが、Moodle上でまだ完了していません' : 'Moodleで未提出・未完了';
+    if (early) reason = early + (d.status === 'form' ? '（外部フォーム。済んだらチェック）' : '');
     items.push({
       id: d.id, title: d.title, detail: d.course, due: d.due, source: 'moodle',
       url: d.formURL ?? d.url ?? moodleURL(S, '/calendar/view.php?view=upcoming'), reason,
@@ -234,5 +286,5 @@ function isPlaceholder(u) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus, MailCategory, todos, calendarItems, validURL, isPlaceholder, gmailURL };
+  module.exports = { esc, Fmt, remainingText, urgency, startOfDay, sameDay, monthKey, Importance, Timetable, SubmissionStatus, MailCategory, todos, calendarItems, validURL, isPlaceholder, gmailURL, guessDate, cancellations, cancelledBefore, WEEK_DAYS };
 }

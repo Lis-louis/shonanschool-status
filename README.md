@@ -71,7 +71,7 @@ To check right away, use **Settings → App → Check for updates** (or the menu
 
 | Screen | What it shows |
 |---|---|
-| Home | Today's classes (click one to open its Moodle course, or search Moodle for it if no course matches) / **To-dos** = unfinished Moodle assignments + mail that needs action / announcements / mail from the university |
+| Home | Today's classes (click one to open its Moodle course, or search Moodle for it if no course matches) / **To-dos** = unfinished Moodle assignments + mail that needs action (only what is due within 7 days, since classes are weekly; nothing that has not opened yet; work posted early because next week's class is cancelled is still shown) / announcements / mail from the university |
 | Calendar | Month view of the weekly timetable, Moodle events, deadlines, and due dates found in mail |
 | Moodle | **Summary**: assignments and deadlines, notifications (those about work you have already submitted are folded away), courses (with progress; hide courses you no longer take with "Hide" and bring them back from "Hidden courses"). **Browser**: the official site inside the app |
 | Campus Square | **Summary**: timetable by weekday, cancellations / make-up classes, portal announcements. **Browser**: the official site |

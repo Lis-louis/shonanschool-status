@@ -245,6 +245,49 @@ struct CampusSnapshot: Sendable {
     var warnings: [String]
 }
 
+/// ホームの「やること」を今週の分だけにするための規則（Windows版 logic.js の todos({ thisWeek }) と同じ）
+enum ThisWeek {
+    /// 授業は週1回なので、ホームに出す Moodle の締切は「あと7日」まで
+    static let days = 7
+
+    /// 締切まで「あと○日」の○（画面の表示と同じく切り捨て）が 7 を超えるか
+    static func isLater(_ due: Date, now: Date) -> Bool {
+        Int(floor(due.timeIntervalSince(now) / 86400)) > days
+    }
+
+    /// 文の中の日付（「12/2(水)」「12月2日」「2026/12/2」）。年が無ければ now に近い年にする
+    static func guessDate(_ text: String, now: Date = .now, calendar: Calendar = .current) -> Date? {
+        let s = text.precomposedStringWithCompatibilityMapping
+        guard let re = try? NSRegularExpression(pattern: "(?:(\\d{4})\\s*[/年.-]\\s*)?(\\d{1,2})\\s*[/月]\\s*(\\d{1,2})\\s*日?"),
+              let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) else { return nil }
+        func group(_ i: Int) -> Int? { Range(m.range(at: i), in: s).flatMap { Int(s[$0]) } }
+        guard let mon = group(2), let day = group(3), (1...12).contains(mon), (1...31).contains(day) else { return nil }
+        func date(_ y: Int) -> Date? { calendar.date(from: DateComponents(year: y, month: mon, day: day)) }
+        if let y = group(1) { return date(y) }
+        let y = calendar.component(.year, from: now)
+        return [y - 1, y, y + 1].compactMap(date).min { abs($0.timeIntervalSince(now)) < abs($1.timeIntervalSince(now)) }
+    }
+
+    /// Campus Square で見つけた休講（休講ページの表の行と、ポータルのお知らせのうち「休講」を含む行）
+    static func cancellations(_ c: CampusSnapshot?, now: Date = .now, calendar: Calendar = .current) -> [(text: String, date: Date)] {
+        guard let c else { return [] }
+        let lines = (c.cancellations?.rows ?? []).map { $0.filter { !$0.isEmpty }.joined(separator: " ") } + c.portlets.flatMap(\.lines)
+        return lines.filter { $0.contains("休講") }.compactMap { t in guessDate(t, now: now, calendar: calendar).map { (t, $0) } }
+    }
+
+    /// 締切の科目に、今日から締切までの間の休講があるか（「来週は休講なので2週間前から出ている課題」）
+    static func cancelledBefore(course: String, due: Date, in list: [(text: String, date: Date)],
+                                now: Date = .now, calendar: Calendar = .current) -> (text: String, date: Date)? {
+        func core(_ s: String) -> String {
+            Timetable.courseKey(s).replacingOccurrences(of: "\\([^)]*\\)", with: "", options: .regularExpression)
+        }
+        let key = core(course)
+        guard key.count >= 3 else { return nil }
+        let start = calendar.startOfDay(for: now)
+        return list.first { $0.date >= start && $0.date <= due && core($0.text).contains(key) }
+    }
+}
+
 enum Importance {
     static let keywords = ["休講", "教室変更", "補講", "締切", "期限", "重要", "緊急", "至急", "変更"]
     static func isImportant(_ text: String) -> Bool { keywords.contains { text.contains($0) } }

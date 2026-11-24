@@ -83,3 +83,17 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - `Views/HomeView.swift`・`Views/ServicePages.swift`：`ClassCell(..., day:)` を渡す
   - `Tests/CampusHubTests/CampusHubTests.swift`：`TimetableCourseTests` を追加（未実行）
 - 確認手順：ホームの「今日の授業」と Campus Square の「時間割」で、コマの右に「Moodle」が出て、押すとそのコースが開くこと。
+
+### 2026-11-24：ホームの「やること」を今週の分だけにする
+- Windows 版で実装・実データで確認済み（0.3.3）：`logic.js` の `todos(S, …, { thisWeek: true })`（ホームだけ。Moodle 画面の「課題・締切」は従来どおり全部）。
+  - 受付開始前（notOpenYet）は出さない。「あと○日」（切り捨て）が 8 以上の Moodle の締切は出さない（メール由来は対象外）。
+  - 例外（早めに出ている課題）：締切が先でも、もう提出できる（notSubmitted / form）か、Campus Square の休講（休講ページの表・ポータルの「休講」を含む行）に
+    今日〜締切の間のその科目の休講があれば出す。理由欄に「○月○日が休講なので早めに出ている課題です」などと出る。
+  - 隠した件数は「あと8日以上先・受付開始前の課題 N件は…」として出し、押すと Moodle 画面へ。
+  - 実データ：17件 → 3件（隠した14件はすべて受付開始前）。休講の例外は実データに休講がなかったため、テストでのみ確認。
+- Mac 版に同じ変更を入れた：
+  - `Models/Domain.swift`：`enum ThisWeek`（isLater・guessDate・cancellations・cancelledBefore）→ **swiftc でコンパイル・実行し Windows 版と同じ結果を確認済み**
+  - `Store/AppStore.swift`：`todos(…, thisWeek:)`（**未ビルド**）
+  - `Views/MailView.swift`：`TodoCard(thisWeek:)` と隠した件数の案内、`Views/HomeView.swift`：`TodoCard(limit: 6, thisWeek: true)`（**未ビルド**）
+  - `Tests/CampusHubTests/CampusHubTests.swift`：`ThisWeekTests`（未実行）
+- 確認手順：ホームの「やること」に受付開始前・あと8日以上先が出ず、下に「…N件は、Moodle の『課題・締切』で見られます」が出ること。

@@ -88,7 +88,7 @@ struct HomeView: View {
                 }
             default:
                 VStack(spacing: 8) {
-                    TodoCard(limit: 6)
+                    TodoCard(limit: 6, thisWeek: true)
                     if case .failed(let m) = store.moodle { StatusMessage(kind: .error, message: "Moodle：" + m, retry: true, loginService: .moodle) }
                     if case .notConfigured(let m) = store.moodle { StatusMessage(kind: .notConfigured, message: "Moodle：" + m, settings: true, loginService: .moodle) }
                 }

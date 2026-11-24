@@ -226,18 +226,36 @@ final class AppStore {
         return URL(string: "https://mail.google.com/mail/u/?authuser=\(user.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(.init(charactersIn: "@.-_"))) ?? "")#all/\(m.threadId)")
     }
 
-    /// Moodle の未完了課題 ＋ メールで見つけた要対応
-    func todos(includeDone: Bool = false, now: Date = .now) -> [TodoItem] {
+    /// Moodle の未完了課題 ＋ メールで見つけた要対応。
+    /// thisWeek（ホーム）のときは、受付開始前のものと、あと8日以上先のものを出さない。
+    /// ただし先の締切でも、もう提出できるもの・締切までに休講があるもの（早めに出ている課題）は出す
+    func todos(includeDone: Bool = false, now: Date = .now, thisWeek: Bool = false) -> [TodoItem] {
         var items: [TodoItem] = []
+        let cancels = thisWeek ? ThisWeek.cancellations(campus.value, now: now) : []
         for d in moodle.value?.deadlines ?? [] where !d.status.isDone {
+            var early: String?
+            if thisWeek {
+                if d.status == .notOpenYet { continue }
+                if ThisWeek.isLater(d.due, now: now) {
+                    if let course = d.course, let c = ThisWeek.cancelledBefore(course: course, due: d.due, in: cancels, now: now) {
+                        let md = c.date.formatted(.dateTime.month(.defaultDigits).day().locale(Locale(identifier: "ja_JP")))
+                        early = "締切は先ですが、\(md)が休講なので早めに出ている課題です"
+                    } else if d.status == .notSubmitted || d.status == .form {
+                        early = "締切は先ですが、もう提出できます（早めに出ている課題）"
+                    } else {
+                        continue
+                    }
+                }
+            }
             let overdue = d.due < now
-            let reason: String = switch d.status {
+            var reason: String = switch d.status {
             case .form: "外部フォームです。提出したかはアプリから分からないので、済んだらチェックしてください"
             case .notSubmitted: overdue ? "期限を過ぎていて、まだ提出していません（ページで確認）" : "まだ提出していません（ページで確認）"
             case .notOpenYet: "まだ受付が始まっていません（開始されたら取り組む）"
             default: !d.needsAction ? "Moodleの予定にある締切（提出済みかは未確認）"
                 : overdue ? "期限を過ぎていますが、Moodle上でまだ完了していません" : "Moodleで未提出・未完了"
             }
+            if let early { reason = early + (d.status == .form ? "（外部フォーム。済んだらチェック）" : "") }
             items.append(TodoItem(id: d.id, title: d.title, detail: d.course, due: d.due, source: .moodle,
                                   url: d.formURL ?? d.url ?? config.moodleUpcoming, reason: reason,
                                   overdueHint: overdue && d.needsAction && d.status != .form && d.status != .notOpenYet))

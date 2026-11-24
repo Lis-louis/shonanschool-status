@@ -267,6 +267,27 @@ import Testing
     }
 }
 
+@Suite struct ThisWeekTests {
+    @Test func earlyAssignmentWhenClassIsCancelledBeforeDue() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        let iso = ISO8601DateFormatter()
+        let now = iso.date(from: "2026-11-24T04:49:00Z")!
+        let snap = CampusSnapshot(timetable: nil, portlets: [Portlet(title: "お知らせ", lines: ["英語総合発展 12月17日 休講"])],
+                                  cancellations: ExtractedTable(title: nil, header: [], rows: [["12/2(水)", "3限", "データサイエンス入門２（メ）", "休講"]]),
+                                  warnings: [])
+        let list = ThisWeek.cancellations(snap, now: now, calendar: cal)
+        #expect(list.count == 2)
+        #expect(ThisWeek.cancelledBefore(course: "【情】後学期_データサイエンス入門２（メ）[水3]", due: iso.date(from: "2026-12-09T14:59:00Z")!,
+                                         in: list, now: now, calendar: cal) != nil)
+        // 休講が締切より後なら早めの課題ではない
+        #expect(ThisWeek.cancelledBefore(course: "【情】後学期_英語総合発展木３－３[木3]", due: iso.date(from: "2026-12-10T14:59:00Z")!,
+                                         in: list, now: now, calendar: cal) == nil)
+        #expect(!ThisWeek.isLater(iso.date(from: "2026-12-01T08:00:00Z")!, now: now))  // あと7日は出す
+        #expect(ThisWeek.isLater(iso.date(from: "2026-12-04T14:59:00Z")!, now: now))   // あと10日は出さない
+    }
+}
+
 @Suite struct ClosedEventTests {
     @Test func closedQuestionnaireIsDroppedButLateAssignmentKept() throws {
         let past = Int(Date.now.timeIntervalSince1970) - 86400

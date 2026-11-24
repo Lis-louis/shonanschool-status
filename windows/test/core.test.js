@@ -266,3 +266,36 @@ test('時間割のコマから Moodle のコースを見つける', () => {
   assert.equal(T.searchURL('', '心理をよむ'), null);
   assert.equal(T.moodleCourse(null, 'B31L07K1\nプログラミング実習', '火', '1限', now), null);
 });
+
+test('ホームの「やること」は今週の分だけ（受付前・あと8日以上先は出さない。早めに出ている課題は出す）', () => {
+  const now = new Date('2026-11-24T13:49:00+09:00').getTime();
+  const at = s => new Date(s).getTime();
+  const dl = (id, course, due, status) => ({ id, title: id, course, due: at(due), url: null, needsAction: true, module: 'assign', status, formURL: null });
+  const S = {
+    doneIDs: [], config: C,
+    moodle: { value: { deadlines: [
+      dl('今週', '【情】後学期_確率統計リテラシ２（メ）[火3]', '2026-11-30T23:59:00+09:00', 'unknown'),
+      dl('あと7日', '【情】後学期_確率統計リテラシ２（メ）[火3]', '2026-12-01T17:00:00+09:00', 'notSubmitted'),
+      dl('受付前', '【情】後学期_微分積分学（メ）[金1]', '2026-11-27T23:59:00+09:00', 'notOpenYet'),
+      dl('来週の分', '【情】後学期_微分積分学（メ）[金1]', '2026-12-04T23:59:00+09:00', 'unknown'),
+      dl('もう出せる', '【情】後学期_ＩＴ演習基礎１（メ）[火4]', '2026-12-08T23:59:00+09:00', 'notSubmitted'),
+      dl('休講で早め', '【情】後学期_データサイエンス入門２（メ）[水3]', '2026-12-09T23:59:00+09:00', 'unknown'),
+      dl('休講が締切の後', '【情】後学期_英語総合発展木３－３[木3]', '2026-12-10T23:59:00+09:00', 'unknown'),
+    ] } },
+    mail: { value: { messages: [] } },
+    campus: { value: {
+      cancellations: { rows: [['12/2(水)', '3限', 'データサイエンス入門２（メ）【担当】', '休講'], ['12/9(水)', '5限', '微分積分学（メ）', '補講']] },
+      portlets: [{ title: 'お知らせ', lines: ['英語総合発展 12月17日 休講'] }],
+    } },
+  };
+  const ids = L.todos(S, false, now, { thisWeek: true }).map(t => t.id);
+  assert.deepEqual(ids.sort(), ['あと7日', 'もう出せる', '今週', '休講で早め'].sort());
+  const early = L.todos(S, false, now, { thisWeek: true }).find(t => t.id === '休講で早め');
+  assert.match(early.reason, /12月2日が休講/);
+  // 絞り込まないとき（Moodle 画面など）はすべて出る
+  assert.equal(L.todos(S, false, now).length, 7);
+  // 日付の読み取り（年なしは近い年）
+  assert.equal(L.guessDate('12/2(水) 3限', now), new Date(2026, 11, 2).getTime());
+  assert.equal(L.guessDate('1月8日 休講', now), new Date(2027, 0, 8).getTime());
+  assert.equal(L.guessDate('休講のお知らせ', now), null);
+});
