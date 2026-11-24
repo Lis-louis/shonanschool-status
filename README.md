@@ -1,135 +1,243 @@
-# キャンパスハブ（my-school-status）
+<p align="center">
+  <img src="packaging/AppIcon-1024.png" width="128" alt="CampusHub icon">
+</p>
 
-湘南工科大学の Moodle・Campus Square・大学メールを1つにまとめるアプリ。Mac版（SwiftUI）と Windows版（Electron、`windows/`）があります。
-見た目は鈴（`../suzu_ai`）と同じ配色・部品で、鈴の画像を使っています（昼／夜はmacOSの外観に連動）。
+<h1 align="center">CampusHub — Moodle, Campus Square and university mail in one place</h1>
 
-## 画面
+<p align="center">
+  <b>English</b> | <a href="README.ja.md">日本語</a>
+</p>
 
-| 画面 | 内容 |
-| --- | --- |
-| ホーム | 今日の授業／**やること（まだできていないこと）**＝Moodleの未完了課題＋メールの要対応／お知らせ／学校から届いているメール |
-| カレンダー | 月表示。毎週の時間割・Moodleの予定・締切・メールで見つけた期限を日ごとに表示 |
-| Moodle | **まとめ**：課題・締切、通知、コース（進捗つき）。**ブラウザ**：公式サイトをアプリ内で表示 |
-| Campus Square | **まとめ**：曜日別の時間割、休講・補講の表、ポータルの各お知らせ。**ブラウザ**：公式サイト |
-| メール | Gmail を読み取り専用で取得し「要対応・締切／休講・授業変更／試験・レポート／Moodle通知／行事／お知らせ」に自動で仕分け。督促・未提出などの語や期限の日付も検出 |
-| 設定 | ログイン情報、Gmail連携、自動ログイン、URL、表示項目、通知、サンプル表示、**接続の診断** |
+<p align="center">
+  A Mac / Windows app for Shonan Institute of Technology that brings Moodle assignments and deadlines,<br>
+  the Campus Square timetable and cancellations, and your university mail together on one screen.<br>
+  It shares its colors and components with "Suzu" and uses Suzu's artwork.
+</p>
 
-## しくみ
+---
 
-1. **自動ログイン**：保存したID・パスワードを、公式ログインページ（Moodle: `#username`/`#password`、Campus Square: `#userNameInput`/`#passwordInput`）の入力欄に入れてボタンを押します。ログイン画面を自作・模倣はしません。
-2. **まとめ表示**：画面に出さない WebView でログイン後のページを開き、
-   - Moodle：Moodle自身のダッシュボードが使う AJAX サービス（`core_course_get_enrolled_courses_by_timeline_classification`、`core_calendar_get_action_events_by_timesort`、`message_popup_get_popup_notifications`）をログイン中のページから呼びます。
-   - Campus Square：ポータルの各枠の文字、曜日が並ぶ表（時間割）、休講ページの表を読み取ります。
-3. **アプリ内ブラウザ**：教材のダウンロード（~/Downloads）、課題ファイルのアップロード、`_blank` リンクに対応。大学のドメイン外のリンクは既定のブラウザで開きます。
+## Features
 
-### 安全のための決まり
-- ID・パスワードは macOS キーチェーンにだけ保存（`WhenUnlockedThisDeviceOnly`：iCloud同期・移行なし）。コード・設定ファイル・ログには出しません。
-- 自動入力は「https で、設定したログインホストと完全一致するページ」だけ。ページのスクリプトから隔離された環境（`WKContentWorld.defaultClient`）で入力します。
-- 自動でボタンを押すのは30秒に1回まで（失敗を繰り返してアカウントロックされないように）。
-- 読み取った内容はメモリ上だけで、ファイルに保存しません。Cookie はこのアプリ専用の保存場所に残ります（設定 →「ログイン状態を消去」で削除）。
-- 自動ログインや画面の読み取りが大学の利用規約・情報ポリシーで認められているかは、各自で確認してください。更新は手動（起動時と「更新」ボタン）だけで、大学のサーバーに負荷をかける定期取得はしません。
+- **Everything on one screen**: today's classes, your to-dos (unfinished Moodle assignments + mail that needs action), announcements, and university mail on the Home screen.
+- **Calendar**: a month view showing your weekly timetable, Moodle events, deadlines, and due dates found in mail, day by day.
+- **Automatic sign-in**: fills your saved ID and password into the official sign-in pages. It never builds or imitates a sign-in page of its own.
+- **Automatic mail sorting**: reads Gmail (read-only) and sorts it into "action needed / deadlines", "cancellations / class changes", "exams / reports", "Moodle notifications", "events", and "announcements". It also detects reminder words and due dates, and shows why each mail was sorted where it is.
+- **In-app browser**: download course materials and upload assignment files. Links outside the university's domain open in your default browser.
+- **Built for each OS**: SwiftUI on Mac, Electron on Windows (`windows/`). Same screens, same way of reading pages.
+- **Safety first**: passwords are stored only in the OS's secure storage (Keychain / DPAPI). Nothing read from the sites is written to disk.
+- **Day / night theme**: Suzu's artwork and the colors follow your OS's light / dark appearance.
 
-## 未確定・推定の値
+## Install
 
-| 項目 | 値 | 状態 |
-| --- | --- | --- |
-| Moodle | `https://moodle2026.shonan-it.ac.jp` | 確認済み（ログインフォームも確認） |
-| Campus Square | `https://portal.shonan-it.ac.jp/campusweb/` | 確認済み（ログインフォームも確認） |
-| 時間割 | `campussquare.do?_flowId=RSW0001000-flow` | 確認済み（ポータルのメニュー「履修登録・登録状況照会」） |
-| 休講・補講 | `_flowId=KHW0001100-flow` | **推定** |
-| 成績 / シラバス | `SIW0001300-flow` / `SYW0001000-flow` | **推定** |
-| 出席管理 | `https://syusseki.shonan-it.ac.jp/campusaa/` | ログインページのリンクより |
-| 大学メール | Google Workspace（Gmail） | DNS（MXレコード）で確認 |
+Download the installer for your OS from the root of this repository.
 
-推定のページが違う場合：Campus Square の「ブラウザ」で正しいページを開き、右上の「…」→「このページを『時間割』に設定」。
+| OS | File | Steps |
+|---|---|---|
+| Windows | [`CampusHub-Setup-0.2.0.exe`](https://github.com/Lis-louis/my-school-status/raw/main/CampusHub-Setup-0.2.0.exe) | Run it and follow the setup (install location → Install). Installs for the current user, no administrator rights needed. Creates desktop and Start menu shortcuts |
+| macOS | `CampusHub-0.2.0.pkg` | **Coming soon** (run `./scripts/build-pkg.sh` on a Mac to build it). Installs キャンパスハブ.app into Applications |
 
-## メール（Gmail）の連携手順
+To uninstall: on Windows, use **Settings → Apps → Installed apps → キャンパスハブ → Uninstall**. On macOS, move キャンパスハブ from Applications to the Trash.
 
-Google は、アプリに埋め込んだブラウザでのログインを認めていないため、Google 公式の OAuth（既定のブラウザでログイン）と Gmail API（読み取り専用）を使います。最初に一度だけ、次の準備が必要です。
+> The installers are not code-signed yet, so the OS may warn you the first time.
+> Windows: if SmartScreen appears, click **More info → Run anyway**.
+> macOS: if it is blocked, right-click → **Open**, or go to **System Settings → Privacy & Security** and click **Open Anyway**.
 
-1. [Google Cloud Console](https://console.cloud.google.com/) で新しいプロジェクトを作る（個人の Google アカウントで可）
-2. 「APIとサービス → ライブラリ」で **Gmail API** を有効にする
-3. 「OAuth 同意画面」を作る（種類：外部、公開ステータス：テスト）。**テストユーザーに大学のメールアドレスを追加**する
-4. 「認証情報 → 認証情報を作成 → OAuth クライアント ID」で、種類 **デスクトップアプリ** を作る
-5. キャンパスハブの「設定 → メール（Gmail）」に、クライアントIDとシークレットを入れて保存
-6. 「Googleでログイン」→ ブラウザで大学のアカウントを選び、読み取りを許可する
+## Requirements
 
-- 大学の管理者が外部アプリを制限している場合は、手順6で「アクセスがブロックされました」と出ます。その場合は大学（情報センター等）に確認してください。
-- 取得するのは件名・差出人・日時・冒頭の一部（snippet）だけで、保存しません。リフレッシュトークンとシークレットはキーチェーンに入ります。
-- 仕分けは決まった言葉と日付の書き方で行い、各メールに「仕分けの理由」を表示します（`Sources/CampusHub/Services/MailClassifier.swift`）。
+- Windows 10 / 11, 64-bit (x64)
+- macOS 14 Sonoma or later
+- To build: Node.js LTS (Windows version), Xcode 16 or later / Swift 6 toolchain (Mac version)
 
-## うまく読み込めないとき
+## First-time setup
 
-「設定 → 接続の診断」か `~/Library/Logs/CampusHub/diagnostics.log` に、どこで止まったか（開いたページのホスト名・パス、件数、エラー）が出ます。ID・パスワード・メールや授業の内容は書きません。
+1. Save your student ID and password in **Settings → Sign-in**, then press **Refresh**.
+2. To see university mail too, set up the Google connection as described in [Connecting Gmail](#connecting-gmail).
+3. To just look at the screens, use **Settings → Show sample data**.
 
-## インストーラーを作る
+## Screens
 
-| | コマンド | できるもの |
-| --- | --- | --- |
-| Mac | `./scripts/build-pkg.sh` | `CampusHub-0.2.0.pkg`（リポジトリ直下。/Applications/キャンパスハブ.app に入る） |
-| Windows | `./scripts/build-windows.sh` | `CampusHub-Setup-0.2.0.exe`（リポジトリ直下。Mac上でも Windows 上（`cd windows && npm run dist:win`）でも作れる。Node.js が必要） |
+| Screen | What it shows |
+|---|---|
+| Home | Today's classes / **To-dos** = unfinished Moodle assignments + mail that needs action / announcements / mail from the university |
+| Calendar | Month view of the weekly timetable, Moodle events, deadlines, and due dates found in mail |
+| Moodle | **Summary**: assignments and deadlines, notifications, courses (with progress). **Browser**: the official site inside the app |
+| Campus Square | **Summary**: timetable by weekday, cancellations / make-up classes, portal announcements. **Browser**: the official site |
+| Mail | Reads Gmail (read-only) and sorts it by content |
+| Settings | Sign-in, Gmail connection, automatic sign-in, URLs, what to show, notifications, sample data, **connection diagnostics** |
 
-- どちらも開発者署名はしていません。Mac は初回「右クリック → 開く」、Windows は SmartScreen の「詳細情報 → 実行」が必要です。
-- Windows版は `./scripts/build-windows.sh --run` で Mac 上でも画面を確認できます（`--test` はテストだけ）。
-- Windows 上で作るとき（Node.js の LTS 版を入れておく）:
-  ```bat
-  cd windows
-  npm install --save-dev --save-exact electron electron-builder
-  npm test
-  npm run dist:win
-  ```
-  → `dist\windows\CampusHub-Setup-0.2.0.exe`。`npm start` でインストールせずに起動できます。
+### Shortcuts
 
-## Windows版（`windows/`）
+| Action | Result |
+|---|---|
+| Ctrl+R (Windows) / ⌘R (Mac) | Refresh |
+| Ctrl+1–6 (Windows) | Switch to Home, Calendar, Moodle, Campus Square, Mail, Settings |
+| `CampusHub.exe --section calendar` (Windows)<br>`open -a キャンパスハブ --args --section calendar` (Mac) | Open on a given screen (`home` / `calendar` / `moodle` / `campusSquare` / `mail` / `settings`) |
 
-Mac版と同じ画面・同じ読み取り方（自動ログイン → 画面に出さないブラウザで読み取り、Gmail API）を Electron で作ったものです。
+## How it works
 
-| Mac版 | Windows版 |
-| --- | --- |
-| キーチェーン | Windows の DPAPI で暗号化して `%APPDATA%\キャンパスハブ\secrets.json` に保存（Electron safeStorage） |
-| UserDefaults | `%APPDATA%\キャンパスハブ\settings.json` |
-| `~/Library/Logs/CampusHub/diagnostics.log` | `%APPDATA%\キャンパスハブ\logs\diagnostics.log` |
-| WKWebView（`.defaultClient` で自動入力） | Chromium（隔離された実行環境で自動入力。Cookie は `persist:campushub` に保存） |
-| 締切の通知（予約） | アプリを起動している間だけ、Windows の通知センターに出す |
+1. **Automatic sign-in**: types your saved ID and password into the fields of the official sign-in pages (Moodle: `#username` / `#password`, Campus Square: `#userNameInput` / `#passwordInput`) and presses the button.
+2. **Summaries**: opens the signed-in pages in a browser that is never shown, then
+   - Moodle: calls the AJAX services that Moodle's own dashboard uses (`core_course_get_enrolled_courses_by_timeline_classification`, `core_calendar_get_action_events_by_timesort`, `message_popup_get_popup_notifications`) from the signed-in page.
+   - Campus Square: reads the text in each portal panel, the weekday table (timetable), and the table on the cancellations page.
+3. **In-app browser**: supports downloading materials (to your Downloads folder), uploading assignment files, and `_blank` links. Links outside the university's domain open in your default browser.
 
-- 起動時に開く画面：`CampusHub.exe --section calendar`
-- 構成：`src/main/`（ログイン・読み取り・Gmail・保存）、`src/renderer/`（画面）、`test/`（`npm test`）
-- 大学ごとの初期値は `windows/src/main/config.js`（Mac版の `DefaultConfig.swift` と同じ値。片方を変えたらもう片方も）
-- ページ内で動かすスクリプトは `windows/src/main/scripts.js`（Mac版の `Scripts.swift` と同じ内容）
+## Safety and privacy
 
-## 起動方法
+- Your ID and password are stored only in the OS's secure storage, never in code, settings files, or logs.
+  - Mac: Keychain (`WhenUnlockedThisDeviceOnly`: no iCloud sync or migration)
+  - Windows: encrypted with DPAPI in `%APPDATA%\キャンパスハブ\secrets.json` (Electron safeStorage)
+- Automatic sign-in only fills pages that are https and whose host exactly matches the configured sign-in host. Filling runs in an environment isolated from the page's own scripts.
+- The sign-in button is pressed automatically at most once every 30 seconds, so repeated failures can't lock your account.
+- What the app reads stays in memory and is never saved to disk. Cookies stay in the app's own storage (delete them with **Settings → Clear sign-in state**).
+- Data is refreshed only by hand (at launch and with the Refresh button). The app never polls the university's servers in the background.
+
+> Check for yourself whether your university's terms of use and information policies allow automatic sign-in and reading pages this way.
+
+## Connecting Gmail
+
+Google doesn't allow signing in through a browser embedded in an app, so CampusHub uses Google's official OAuth (sign-in happens in your default browser) and the Gmail API (read-only). You need to set this up once:
+
+1. Create a new project in the [Google Cloud Console](https://console.cloud.google.com/) (a personal Google account is fine).
+2. Under **APIs & Services → Library**, enable the **Gmail API**.
+3. Create an **OAuth consent screen** (type: External, publishing status: Testing). **Add your university email address as a test user.**
+4. Under **Credentials → Create credentials → OAuth client ID**, create one of type **Desktop app**.
+5. In CampusHub, enter the client ID and secret in **Settings → Mail (Gmail)** and save.
+6. Click **Sign in with Google**, choose your university account in the browser, and allow read access.
+
+- If your university's administrators restrict third-party apps, step 6 shows "Access blocked". Ask your university (e.g. its IT center) in that case.
+- Only the subject, sender, date, and the first part of the body (snippet) are fetched, and they are not saved. The refresh token and secret go into the same secure storage as your password.
+- Sorting uses fixed keywords and date formats (Mac: `Sources/CampusHub/Services/MailClassifier.swift`).
+
+## Build and run
+
+### Windows (`windows/`)
+
+Requires the LTS version of [Node.js](https://nodejs.org/).
+
+```bat
+cd windows
+npm install
+npm test             & rem unit tests
+npm start            & rem launch without installing
+npm run dist:win     & rem build the installer
+```
+
+`npm run dist:win` creates `dist\windows\CampusHub-Setup-<version>.exe` and also copies it to the repository root.
+
+### macOS
 
 ```sh
-./scripts/build-app.sh --install                     # /Applications/キャンパスハブ.app に入れる（ドックに固定するならこれ）
-open -a キャンパスハブ --args --section calendar       # 指定の画面で開く（home / calendar / moodle / campusSquare / mail / settings）
-swift run                                            # 開発用
-swift test                                           # テスト
+git clone https://github.com/Lis-louis/my-school-status.git
+cd my-school-status
+
+./scripts/build-app.sh --install   # installs /Applications/キャンパスハブ.app (use this to keep it in the Dock)
+swift run                          # launch for development
+swift test                         # unit tests
 ```
 
-初回は「設定 → ログイン情報」で学籍番号とパスワードを保存し、「更新」を押してください。
-画面だけ確認したいときは「設定 → サンプルデータで表示を確認する」。
+### Building the installers
 
-## 設定する場所
+| Installer | Command | Output |
+|---|---|---|
+| Windows `.exe` | `cd windows && npm run dist:win` (on Windows)<br>`./scripts/build-windows.sh` (on a Mac) | `CampusHub-Setup-<version>.exe` (repository root) |
+| macOS `.pkg` | `./scripts/build-pkg.sh` (on a Mac) | `CampusHub-<version>.pkg` (repository root; installs /Applications/キャンパスハブ.app) |
 
-- 大学ごとの初期値（URL・ログインフォームのセレクタ）：`Sources/CampusHub/Config/DefaultConfig.swift`
-- 自分のMacだけで変える：アプリの「設定」（UserDefaults に保存）
-- ID・パスワード：アプリの「設定 → ログイン情報」（キーチェーン）
-- 配色：`Sources/CampusHub/Theme/Theme.swift`（鈴の `appearance.palette` と同じ値）
-- 画像：`Sources/CampusHub/Resources/Appearance/`（鈴の `face_*.jpg`・`hero_*.jpg`）
-- アプリアイコン：`icon/campus-hub.svg` を差し替えて `./scripts/make-icon.sh && ./scripts/build-app.sh --install`
-  （ドックの表示が古いままなら `rm "$(getconf DARWIN_USER_CACHE_DIR)com.apple.dock.iconcache"; killall Dock`）
+- The Mac `.pkg` can't be built on Windows. The Windows `.exe` can also be built on a Mac (`./scripts/build-windows.sh --run` to preview the screens, `--test` to run the tests only).
+- The installers in the repository root are over 100 MB, so they are stored with [Git LFS](https://git-lfs.com/) (`.gitattributes`).
 
-## ディレクトリ
+## Troubleshooting
+
+**Settings → Connection diagnostics** and the diagnostics log show where loading stopped (host and path of the opened page, item counts, errors). Your ID, password, mail, and class contents are never written there.
+
+- Mac: `~/Library/Logs/CampusHub/diagnostics.log`
+- Windows: `%APPDATA%\キャンパスハブ\logs\diagnostics.log` (menu **File → Open diagnostics log folder**)
+
+## Where things are configured
+
+| Item | Location |
+|---|---|
+| Per-university defaults (URLs, sign-in form selectors) | Mac: `Sources/CampusHub/Config/DefaultConfig.swift`<br>Windows: `windows/src/main/config.js` (same values; change both together) |
+| Changes for your own computer only | The app's Settings (Mac: UserDefaults, Windows: `%APPDATA%\キャンパスハブ\settings.json`) |
+| ID and password | **Settings → Sign-in** in the app |
+| Scripts that run inside pages | Mac: `Sources/CampusHub/Web/Scripts.swift`, Windows: `windows/src/main/scripts.js` (same content) |
+| Colors | `Sources/CampusHub/Theme/Theme.swift` (same values as Suzu's `appearance.palette`) |
+| Images | `Sources/CampusHub/Resources/Appearance/` (Suzu's `face_*.jpg` and `hero_*.jpg`; the Windows version uses the same files) |
+| App icon | Replace `icon/campus-hub.svg`, then run `./scripts/make-icon.sh && ./scripts/build-app.sh --install` |
+
+## Project structure
 
 ```
-Sources/CampusHub/
-  App.swift                 起動・サイドバー・全体の配置
-  Config/DefaultConfig.swift 大学ごとの初期値
-  Models/                   設定・データ型・URL検証
-  Services/                 キーチェーン、通知、サンプルデータ
-  Store/AppStore.swift      状態管理・読み込みの流れ
-  Theme/Theme.swift         鈴テーマ（色・カード・顔・背景）
-  Web/                      自動ログイン、裏で動くWebView、アプリ内ブラウザ、ページ内スクリプト
-  Views/                    各画面
-Tests/CampusHubTests/       URL検証・Moodle応答の解析・時間割などのテスト
+Sources/CampusHub/        Mac version (SwiftUI)
+├─ App.swift              launch, sidebar, overall layout
+├─ Config/                per-university defaults
+├─ Models/                settings, data types, URL validation
+├─ Services/              Keychain, notifications, Gmail, mail sorting, sample data
+├─ Store/                 state and loading flow
+├─ Theme/                 Suzu theme (colors, cards, faces, background)
+├─ Web/                   automatic sign-in, hidden WebView, in-app browser, page scripts
+├─ Views/                 screens
+└─ Resources/Appearance/  Suzu's artwork
+Tests/CampusHubTests/     tests for URL validation, Moodle response parsing, timetable, etc.
+windows/                  Windows version (Electron)
+├─ src/main/              sign-in, reading, Gmail, storage (main process)
+├─ src/renderer/          screens
+├─ src/preload.js         bridge between the screens and the main process
+└─ test/                  unit tests (npm test)
+icon/                     app icon source (SVG)
+packaging/                Mac icons (.icns, PNG)
+scripts/                  build scripts for the .app, .pkg, and Windows .exe
+```
+
+## Status
+
+| Item | Status |
+|---|---|
+| Mac version (SwiftUI) | Done |
+| Windows version (Electron) | Done (installer available) |
+| Moodle / Campus Square sign-in and reading | Done |
+| Gmail connection and sorting | Done |
+| Distributing the Mac installer (.pkg) | Coming soon |
+
+### Unconfirmed and estimated values
+
+| Item | Value | Status |
+|---|---|---|
+| Moodle | `https://moodle2026.shonan-it.ac.jp` | Confirmed (sign-in form too) |
+| Campus Square | `https://portal.shonan-it.ac.jp/campusweb/` | Confirmed (sign-in form too) |
+| Timetable | `campussquare.do?_flowId=RSW0001000-flow` | Confirmed (portal menu "履修登録・登録状況照会") |
+| Cancellations / make-up classes | `_flowId=KHW0001100-flow` | **Estimated** |
+| Grades / syllabus | `SIW0001300-flow` / `SYW0001000-flow` | **Estimated** |
+| Attendance | `https://syusseki.shonan-it.ac.jp/campusaa/` | From a link on the sign-in page |
+| University mail | Google Workspace (Gmail) | Confirmed via DNS (MX records) |
+
+If an estimated page is wrong: open the correct page in Campus Square's **Browser**, then use **…** at the top right → "このページを『時間割』に設定" (set this page as the timetable).
+
+### Known limitations
+
+- The URLs for cancellations, grades, and the syllabus are estimated, so they may not match the university's pages (fix them as described above).
+- On Windows, deadline notifications appear in the notification center only while the app is running.
+- If the university changes its sites, reading may stop working (check **Settings → Connection diagnostics**).
+- The app is shown in Japanese only.
+
+## License
+
+Code and character are licensed separately.
+
+| What | License |
+|---|---|
+| Code (`Sources/`, `Tests/`, `windows/`, `scripts/`, etc.) | [MIT License](LICENSE) |
+| The character Suzu (name, design, images in `Sources/CampusHub/Resources/Appearance/`, icons containing her artwork) | [Character Usage Guidelines](CHARACTER_GUIDELINES.en.md) |
+
+You may draw and share non-commercial fan art of Suzu, with credit.
+The following are not allowed:
+
+- Uses that go against public decency
+- Reposting or redistributing the images
+- Commercial use
+- Using Suzu for AI training
+
+If you distribute a modified version of the app, remove all of Suzu's images and icons (it is no longer the official version).
+
+```
+Character "Suzu" © Lis-louis
 ```
