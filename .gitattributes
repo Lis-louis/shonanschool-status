@@ -1,0 +1,2 @@
+/CampusHub-Setup-*.exe filter=lfs diff=lfs merge=lfs -text
+/CampusHub-*.pkg filter=lfs diff=lfs merge=lfs -text
