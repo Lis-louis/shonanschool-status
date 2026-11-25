@@ -16,22 +16,25 @@
   裏でダウンロード → 画面上部に「再起動して更新」（`app.js` の `updateBanner`）。押さなくても終了時に入れ替わる。
 - 0.3.0 で導入。0.2.0 以前は自動更新がないので、利用者は一度だけ手で入れ直す必要がある。
 
-## Mac 版で後でやること
+## Mac 版の配布（2026-11-25 に .pkg 配布をやめ、各自ビルドに切り替え）
 
-### 自動更新（Windows 版は 0.3.0 で実装済み、Mac 版は未着手）
-- Windows 版と同じく「新しい版があれば知らせて、ボタンで更新できる」ようにする。
-- 候補：[Sparkle](https://sparkle-project.org/)（SwiftPM で入る。appcast.xml と EdDSA 署名が必要）。
-  署名・公証していない .app だと更新後に Gatekeeper に止められる可能性があるので、そこも確認する。
-- 配布の流れも Windows 版に合わせる：version を上げて push → GitHub Actions（macos ランナー）で
-  `scripts/build-pkg.sh` 相当をビルドし、同じ Release に Mac 用ファイルと appcast を追加する。
-  Windows 用ワークフローは「その版の Release が既にあればスキップ」するので、Mac 用を足すときは同じ Release に相乗りできるよう調整すること。
-- 設定画面の「アプリ」カード（バージョン表示・アップデートを確認）も Mac 版に追加する。
-- 終わったら README（日本語・英語）の「Mac 版の自動アップデートは準備中」「開発状況」の行を直すこと。
+- 一度 .pkg（`scripts/build-pkg.sh`・`.github/workflows/release-mac.yml`）で配ったが、署名・公証なしの .pkg は
+  利用者の Mac でうまくインストールできなかったため廃止した（ファイルも削除済み）。Release に .pkg は上げない。
+- Mac の利用者は README の「Mac 版の入れ方」どおり `git clone` → `./scripts/build-app.sh --install`。更新は `git pull` → 同じコマンド。
+- 版は Windows 版と共通で、`windows/package.json` の `version` が唯一の元（`build-app.sh` が Info.plist の
+  `CFBundleShortVersionString` に入れる。`APP_VERSION` で上書き可）。.app は arm64 + x86_64 のユニバーサル（`ARCHS="arm64"` で片方だけ）。
+- アプリ側：`Sources/CampusHub/Services/AppUpdater.swift` は**お知らせだけ**。.app で起動したときだけ、起動10秒後と3時間ごとに
+  GitHub API の releases を見て、今より新しい版のタグ（下書き・プレリリース以外）があれば（`UpdateCheck.pick`、テストあり）
+  画面上部の `UpdateBanner` に「新しいバージョン x が出ています」と「更新のしかた」（README.ja.md の `#mac-版` を開く）を出す。
+  ダウンロード・入れ替えはしない。README の見出し「#### Mac 版」を変えるときは `UpdateCheck.howToUpdateURL` も直すこと。
+- **未確認**：お知らせの表示。`APP_VERSION=0.3.5 ./scripts/build-app.sh --install` で古い版として入れ、起動10秒後にバナーが出て
+  「更新のしかた」で README が開くこと。
 
-## Mac で確認が必要な未検証の変更
+## Mac で確認が必要な変更（Windows 上で書いたもの）
 
-Windows 上で作業したため、以下の Swift の変更はビルド・動作確認ができていない。
-Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を確認したらこの項目を消すこと。
+以下の Swift の変更は Windows 上で書いたもの。2026-11-24 に Mac で `swift build`・`swift test`（38件）・`scripts/build-app.sh` が通り、
+実データの診断ログで「通知のうち課題などへのリンク N件: 提出済み M件…」が出ることも確認した。
+画面を操作しての確認はまだなので、各項目の確認手順で確かめたら、その項目を消すこと。
 
 ### 2026-11-24：アプリ内ブラウザでページが自分を閉じたとき・表示プロセスが落ちたときの対応
 - 発端：Windows 版でキャンパススクエアを操作中に
@@ -40,7 +43,7 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   WebContentsView の webContents が破棄されたこと。
   → `windows/src/main/browser.js` で、破棄・クラッシュ時に view を作り直して開く前のページへ戻すよう修正済み（Electron で再現・確認済み）。
 - Mac 版は WKWebView なので落ちはしないが、「閉じる」が無反応、表示プロセス終了時に真っ白のままだったため、
-  `Sources/CampusHub/Web/BrowserController.swift` に以下を追加した（**未ビルド・未確認**）：
+  `Sources/CampusHub/Web/BrowserController.swift` に以下を追加した（**Mac でビルド済み・画面での確認はまだ**）：
   - `createWebViewWith` で開く前の URL を `returnURL` に保存
   - `webViewDidClose(_:)`：`returnURL`（なければ戻る）へ戻る
   - `webViewWebContentProcessDidTerminate(_:)`：開き直してメッセージを表示
@@ -51,7 +54,7 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
 - Windows 版で修正・実データで確認済み：通知のリンク先が `/mod/*/view.php?id=…` なら、締切と同じ
   `moodleSubmissionStatus` でページを確かめ、提出済み・回答済みなら「提出済み・回答済みの課題の通知（N件）」に折りたたむ
   （ホームの通知3件からも外す）。小テストの「もう一度受験する」も受験済みとして扱うよう判定語に追加。
-- Mac 版に同じ変更を入れた（**未ビルド・未確認**）：
+- Mac 版に同じ変更を入れた（**Mac でビルド済み・画面での確認はまだ**）：
   - `Models/Domain.swift`：`MoodleNotice.status`・`linksToActivity`
   - `Store/AppStore.swift`：`checkSubmissions` で通知のリンク先も確認（`defer` で控えメールの結果も通知に反映）
   - `Views/ServicePages.swift`：通知カードを未提出／提出済みに分け、`noticeRow` を追加
@@ -63,7 +66,7 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
 ### 2026-11-24：もう受けていないコースを「コース（教材）」から外す・戻す
 - Windows 版で実装・確認済み（0.3.1）：各コースの右に「非表示」、外したものは「非表示にしたコース（N件）」に入り「戻す」で戻る。
   保存先は settings.json の `hiddenCourses`（コース ID の配列）。
-- Mac 版に同じ変更を入れた（**未ビルド・未確認**）：
+- Mac 版に同じ変更を入れた（**Mac でビルド済み・画面での確認はまだ**）：
   - `Store/AppStore.swift`：`hiddenCourseIDs`（UserDefaults `hiddenCourseIDs.v1`）と `setCourseHidden(_:_:)`
   - `Views/ServicePages.swift`：コース一覧を表示中／非表示に分け、`courseRow(_:hidden:)` を追加（目のアイコンのボタン）
 - 確認手順：Moodle 画面の「コース（教材）」で「非表示」を押す → 下の「非表示にしたコース」に移る →「戻す」で元に戻る。
@@ -79,9 +82,9 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
 - Mac 版に同じ変更を入れた：
   - `Models/Domain.swift`：`Timetable.courseKey`・`Timetable.moodleCourse(in:text:day:period:)`
     → **Windows の swiftc でこのファイルだけコンパイル・実行し、Windows 版と同じ結果になることは確認済み**
-  - `Views/Components.swift`：`ClassCell` に `day` を追加し、対応コースがあればボタンにして「Moodle」ラベルを出す（**未ビルド・未確認**。`@Environment(AppStore.self)` を使うようになった）
+  - `Views/Components.swift`：`ClassCell` に `day` を追加し、対応コースがあればボタンにして「Moodle」ラベルを出す（**Mac でビルド済み・画面での確認はまだ**。`@Environment(AppStore.self)` を使うようになった）
   - `Views/HomeView.swift`・`Views/ServicePages.swift`：`ClassCell(..., day:)` を渡す
-  - `Tests/CampusHubTests/CampusHubTests.swift`：`TimetableCourseTests` を追加（未実行）
+  - `Tests/CampusHubTests/CampusHubTests.swift`：`TimetableCourseTests` を追加（Mac で実行・合格）
 - 確認手順：ホームの「今日の授業」と Campus Square の「時間割」で、コマの右に「Moodle」が出て、押すとそのコースが開くこと。
 
 ### 2026-11-25：コースのページに置かれた Google フォームの課題を読み込む（0.3.7）
@@ -126,10 +129,10 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - **表示の修正（0.3.6）**：題名の「（今日から5週間）」と「教室」の列から「5週間その教室」と読めてしまうため、題名は「休講・補講・教室変更」、
     列名は「この日の教室」にし、「どれも書かれている日の1回だけで、ほかの週はいつもどおり」と説明を付けた。各行は「日付 時限」＋区分のチップ＋
     「この日だけ ○○ で授業（ほかの週はいつもの教室）」などの文。ホームのお知らせも「12月19日(土) 1限 科目 → 補講（この日だけ・教室）」。
-    書き方は `logic.js` の `ChangeList`／Mac `Domain.swift` の `enum ChangeList`（swiftc で確認済み）。Mac の `ServicePages.swift`・`HomeView.swift` は**未ビルド**。
+    書き方は `logic.js` の `ChangeList`／Mac `Domain.swift` の `enum ChangeList`（swiftc で確認済み）。Mac の `ServicePages.swift`・`HomeView.swift` は**Mac でビルド済み・画面での確認はまだ**。
 - Mac 版に同じ変更を入れた：
   - `Models/Domain.swift`：`enum ThisWeek`（isLater・guessDate・cancellations・cancelledBefore）→ **swiftc でコンパイル・実行し Windows 版と同じ結果を確認済み**
-  - `Store/AppStore.swift`：`todos(…, thisWeek:)`（**未ビルド**）
-  - `Views/MailView.swift`：`TodoCard(thisWeek:)` と隠した件数の案内、`Views/HomeView.swift`：`TodoCard(limit: 6, thisWeek: true)`（**未ビルド**）
-  - `Tests/CampusHubTests/CampusHubTests.swift`：`ThisWeekTests`（未実行）
+  - `Store/AppStore.swift`：`todos(…, thisWeek:)`（**Mac でビルド済み・画面での確認はまだ**）
+  - `Views/MailView.swift`：`TodoCard(thisWeek:)` と隠した件数の案内、`Views/HomeView.swift`：`TodoCard(limit: 6, thisWeek: true)`（**Mac でビルド済み・画面での確認はまだ**）
+  - `Tests/CampusHubTests/CampusHubTests.swift`：`ThisWeekTests`（Mac で実行・合格）
 - 確認手順：ホームの「やること」に受付開始前・あと8日以上先が出ず、下に「…N件は、Moodle の『課題・締切』で見られます」が出ること。

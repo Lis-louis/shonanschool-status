@@ -81,12 +81,12 @@ struct HomeView: View {
 
     private var todo: some View {
         Group {
-            switch (store.moodle, store.mail) {
-            case (.loading, _), (_, .loading) where store.todos().isEmpty:
+            // Windows 版と同じ：どちらかが読み込み中で、まだ1件も無いときだけ「読み込み中」
+            if (store.moodle.isLoading || store.mail.isLoading) && store.todos().isEmpty {
                 Card(title: "やること（まだできていないこと）", symbol: "checklist") {
                     StatusMessage(kind: .loading, message: "Moodleとメールから読み込み中…")
                 }
-            default:
+            } else {
                 VStack(spacing: 8) {
                     TodoCard(limit: 6, thisWeek: true)
                     if case .failed(let m) = store.moodle { StatusMessage(kind: .error, message: "Moodle：" + m, retry: true, loginService: .moodle) }

@@ -79,11 +79,11 @@ jobs:
           set -euo pipefail
           exe="CampusHub-Setup-$V.exe"
           ls -la "$exe" "$exe.blockmap" latest.yml
-          if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "v$V" "$exe" "$exe.blockmap" --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "v$V" "$exe" "$exe.blockmap" --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" --title "v$V" --generate-notes
+          # Release がもうあれば（Run workflow で上げ直すときなど）上げるだけにする
+          if ! gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "v$V" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
+              || gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null
           fi
+          gh release upload "v$V" "$exe" "$exe.blockmap" --clobber --repo "$GITHUB_REPOSITORY"
           # latest.yml は最後に上げる（これが見えた時点でアプリが更新を始めるため、先に exe を揃えておく）
           gh release upload "v$V" latest.yml --clobber --repo "$GITHUB_REPOSITORY"

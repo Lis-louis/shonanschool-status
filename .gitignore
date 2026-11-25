@@ -65,7 +65,7 @@ build/
 # macOS
 .DS_Store
 
-# 配布用のインストーラー（scripts/build-pkg.sh / build-windows.sh）
+# 配布用のインストーラー（scripts/build-windows.sh）
 dist/
 RFMT/
 

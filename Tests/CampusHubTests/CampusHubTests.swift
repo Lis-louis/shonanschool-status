@@ -345,3 +345,32 @@ import Testing
         #expect(GmailClient.hasReceipt(title: "第8回 出席確認", due: nil, in: [("「第8回 出席確認」の回答のコピー", .distantPast)]))
     }
 }
+
+@Suite struct UpdateCheckTests {
+    private func release(_ tag: String, draft: Bool = false, pre: Bool = false) -> UpdateCheck.Release {
+        UpdateCheck.Release(tag_name: tag, draft: draft, prerelease: pre)
+    }
+
+    @Test func comparesVersionsNumerically() {
+        #expect(UpdateCheck.isNewer("0.3.10", than: "0.3.9"))
+        #expect(UpdateCheck.isNewer("1.0", than: "0.9.9"))
+        #expect(!UpdateCheck.isNewer("0.3.6", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.3.6.0", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.3.5", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.4.0-beta", than: "0.3.6"))
+        #expect(!UpdateCheck.isNewer("0.4.0", than: "開発版"))
+    }
+
+    @Test func picksNewestRelease() {
+        let rs = [release("v0.3.7"), release("v0.3.8"), release("v0.3.6")]
+        #expect(UpdateCheck.pick(rs, current: "0.3.6") == "0.3.8")
+        #expect(UpdateCheck.pick(rs, current: "0.3.8") == nil)
+        #expect(UpdateCheck.pick(rs, current: "開発版") == nil)
+    }
+
+    @Test func skipsDraftsAndPrereleases() {
+        #expect(UpdateCheck.pick([release("v0.4.0", draft: true)], current: "0.3.6") == nil)
+        #expect(UpdateCheck.pick([release("v0.4.0", pre: true)], current: "0.3.6") == nil)
+        #expect(UpdateCheck.pick([release("v0.4.0-beta")], current: "0.3.6") == nil)
+    }
+}

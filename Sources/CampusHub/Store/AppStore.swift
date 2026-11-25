@@ -85,6 +85,8 @@ final class AppStore {
     @ObservationIgnored let campusBrowser: BrowserController
     @ObservationIgnored private var sessions: [PortalService: HeadlessSession] = [:]
     @ObservationIgnored let google = GoogleAuth()
+    /// 新しい版のお知らせ（GitHub Releases）
+    let updater = AppUpdater()
 
     private static let configKey = "universityConfig.v2"
     private static let prefsKey = "appPreferences.v2"
@@ -112,6 +114,7 @@ final class AppStore {
         campusBrowser.store = self
         refreshSavedUsernames()
         googleSignedIn = GoogleSecrets.read(.refreshToken) != nil
+        updater.store = self
     }
 
     func browser(for s: PortalService) -> BrowserController { s == .moodle ? moodleBrowser : campusBrowser }
