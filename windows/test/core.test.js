@@ -151,6 +151,71 @@ test('フォームの控えメールとの照合', () => {
   assert.ok(!P.hasReceipt(d, [{ text: '「第9回 出席確認」の回答のコピー', date: due }]));
 });
 
+test('活動の日付欄から締切を読む', () => {
+  const now = new Date(2026, 10, 25).getTime();
+  assert.equal(P.activityDue('開始: 2026年 11月 25日(水曜日) 0:00 期限: 2026年 12月 2日(水曜日) 23:59', now), new Date(2026, 11, 2, 23, 59).getTime());
+  assert.equal(P.activityDue('開始: 2026年 11月 25日(水曜日) 0:00', now), null);
+  assert.equal(P.activityDue('', now), null);
+});
+
+test('コースのページで見つけたフォームを、締切あり・なしに分ける', () => {
+  const now = new Date(2026, 10, 25, 12).getTime();
+  const courses = [{ id: 5, fullName: '情報数理', url: 'https://moodle2026.shonan-it.ac.jp/course/view.php?id=5' },
+    { id: 6, fullName: '英語', url: 'https://moodle2026.shonan-it.ac.jp/course/view.php?id=6' }];
+  const f = (cm, o) => ({ course: 5, cm, mod: 'url', name: `フォーム${cm}`, form: 'https://docs.google.com/forms/d/e/x' + cm + '/viewform',
+    url: `https://moodle2026.shonan-it.ac.jp/mod/url/view.php?id=${cm}`, section: '', current: false, position: 1, dates: '', text: '', done: false, ...o });
+  const json = JSON.stringify({ stats: { courses: 2 }, forms: [
+    f(1, { name: '第8回 課題（12/1まで）' }),                          // 名前の締切
+    f(2, { dates: '期限: 2026年 11月 20日(金曜日) 23:59' }),            // 締切を過ぎた
+    f(3, { section: '第8回 11月25日' }),                                 // セクションの日付が今週 → 今の回
+    f(4, { section: '第6回 11月1日' }),                                  // 前の回
+    f(10, { section: '第2回 10月7日' }),                                 // 1か月以上前の回 → 出さない
+    f(11, { name: '出席確認（15:30まで）', section: '11/20：第7回' }),    // 時刻だけ → 授業の日のその時刻（過ぎた）
+    f(12, { name: '出席確認（15:30まで）', section: '11/26：第8回' }),    // 時刻だけ → 明日の15:30
+    f(13, { name: '提出課題（締切：次回授業前日夜23:59まで）', section: '第９回 11月25日', text: '第９回 11月25日 の資料' }), // → 12/1 23:59
+    f(14, { name: '#7 課題', section: 'DS入門1 #7 データを読む (1)（6月2日）' }), // 前学期（来年の6月ではない）→ 出さない
+    f(15, { name: '提出課題（締切は授業で指示）', text: '11月25日 の授業資料' }), // 説明文の関係ない日付は締切にしない
+    f(16, { name: '出席登録', section: '第８回 11月18日' }),             // 先週の回 → 今の回ではない
+    f(5, { course: 6, position: 2 }), f(6, { course: 6, position: 5 }), // 日付のないコース → 一番下のセクションが今の回
+    f(7, { course: 6, position: 5, done: true }),                        // 完了マーク済み
+    f(8, {}),                                                            // 締切に既にある活動
+    f(9, { form: 'https://evil.example/forms' }),                       // フォームではない（スクリプト側で除くが念のため）
+  ] });
+  const r = P.parseCourseForms(json, C, courses, ['8'], now, 30);
+  assert.deepEqual(r.deadlines.map(d => d.id).sort(), ['f-1', 'f-12', 'f-13']);
+  assert.equal(r.deadlines[0].due, new Date(2026, 10, 26, 15, 30).getTime());
+  assert.equal(r.deadlines[1].due, new Date(2026, 11, 1, 23, 59).getTime());
+  assert.equal(r.deadlines[2].due, new Date(2026, 11, 1, 23, 59).getTime());
+  assert.equal(r.skipped, 4);
+  const byID = Object.fromEntries(r.forms.map(x => [x.id, x]));
+  assert.equal(byID['f-3'].recent, true);
+  assert.equal(byID['f-4'].recent, false);
+  assert.equal(byID['f-5'].recent, false);
+  assert.equal(byID['f-6'].recent, true);
+  assert.equal(byID['f-7'].status, 'submitted');
+  assert.equal(byID['f-15'].due, null);
+  assert.equal(byID['f-16'].recent, false);
+  assert.ok(!byID['f-8']);
+  assert.equal(byID['f-9'].formURL, 'https://evil.example/forms'); // https なら外部リンクとして持つ（開くのはフォームの URL）
+  assert.equal(P.parseCourseForms('壊れた', C, courses, [], now).forms.length, 0);
+});
+
+test('月のカレンダーにだけある締切を候補にする', () => {
+  const t = Math.floor(Date.now() / 1000) + 86400;
+  const json = JSON.stringify({ events: { data: { events: [{ id: 1, name: 'A', timesort: t, eventtype: 'due', modulename: 'assign' }] } },
+    calendar: [{ data: { weeks: [{ days: [{ events: [
+      { id: 1, name: 'A', timesort: t, eventtype: 'due', modulename: 'assign' },
+      { id: 2, name: 'B 期限', timesort: t, eventtype: 'due', modulename: 'assign', url: 'https://moodle2026.shonan-it.ac.jp/mod/assign/view.php?id=9' },
+      { id: 3, name: 'C 開始', timesort: t, eventtype: 'open', modulename: 'assign' },
+      { id: 4, name: '古い', timesort: t - 5 * 86400, eventtype: 'due', modulename: 'assign' }]}] }] } }] });
+  const s = P.parseMoodle(json, C);
+  assert.deepEqual(s.calendarDue.map(d => d.id), ['m-2']);
+});
+
+test('締切の書かれていないフォームの控えメール', () => {
+  assert.ok(P.hasReceipt({ title: '第8回 出席確認', due: null }, [{ text: '「第8回 出席確認」の回答のコピー', date: 0 }]));
+});
+
 // 画面側の計算
 test('時間割：空きコマを除く', () => {
   const tt = { days: ['月', '火'], periods: [{ label: '1限', byDay: { 月: '講義A\n1号館', 火: '' } }, { label: '2限', byDay: { 月: '-', 火: '演習B' } }] };
@@ -196,6 +261,19 @@ test('やることの並び：督促が先、次に期限順', () => {
   };
   assert.deepEqual(L.todos(S).map(t => t.id), ['mail-x', 'm-soon', 'm-late']);
   assert.equal(L.todos(S, true).length, 4);
+});
+
+test('やること：締切の書かれていないフォームは今の回のものだけ', () => {
+  const S = {
+    config: C, doneIDs: [], prefs: DEFAULT_PREFS, monthItems: {}, campus: { state: 'loading' }, mail: { state: 'loading' },
+    moodle: { state: 'loaded', value: { deadlines: [], courses: [], forms: [
+      { id: 'f-1', title: '今の回', recent: true, status: 'form', formURL: 'https://docs.google.com/forms/x', due: null },
+      { id: 'f-2', title: '前の回', recent: false, status: 'form', due: null },
+      { id: 'f-3', title: '回答済み', recent: true, status: 'formReceipt', due: null },
+    ] } },
+  };
+  assert.deepEqual(L.todos(S).map(t => [t.id, t.url]), [['f-1', 'https://docs.google.com/forms/x']]);
+  assert.deepEqual(L.todos(S, false, Date.now(), { thisWeek: true }).map(t => t.id), ['f-1']);
 });
 
 test('ページ内スクリプトに引数を渡す形', async () => {

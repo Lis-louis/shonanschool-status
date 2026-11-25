@@ -170,6 +170,34 @@ struct DeadlineRow: View {
     }
 }
 
+/// 締切の書かれていないフォーム（コースのページで見つけたもの）
+struct FormRow: View {
+    @Environment(\.palette) private var p
+    var form: MoodleForm
+    var action: () -> Void
+
+    var body: some View {
+        let done = form.status.isDone
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 10) {
+                Capsule().fill(done ? Color.green : p.accent2).frame(width: 4)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(form.title).font(.system(.body, design: .rounded)).foregroundStyle(p.ink).multilineTextAlignment(.leading)
+                    if let course = form.course, !course.isEmpty {
+                        Text(course).font(.caption).foregroundStyle(p.subtle).lineLimit(1)
+                    }
+                    Text("締切の記載なし" + (form.section.map { "（\($0)）" } ?? "")).font(.caption).foregroundStyle(p.subtle)
+                }
+                Spacer()
+                Chip(text: form.status.label ?? "フォーム", symbol: done ? "checkmark.circle.fill" : "questionmark.circle",
+                     color: done ? .green : p.warn)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 func remainingText(_ date: Date, now: Date = .now) -> String {
     let s = date.timeIntervalSince(now)
     if s < 0 { return "期限切れ" }

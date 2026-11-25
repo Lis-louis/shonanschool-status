@@ -61,7 +61,16 @@ enum Scripts {
       call("message_popup_get_popup_notifications",
            { useridto: 0, newestfirst: 1, limit: 20, offset: 0 })
     ]);
-    return JSON.stringify({ courses, events, upcoming, notices, page: location.host + location.pathname });
+    // 「未完了の課題」には、提出ボタンのない課題（説明文に外部フォームのリンクだけがあるもの）が出ない。
+    // 月のカレンダーの締切も読み、あとでそのページにフォームがあるか確かめる
+    const months = [];
+    for (let d = new Date(from * 1000); months.length < 4; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+      months.push([d.getFullYear(), d.getMonth() + 1]);
+      if (new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() > to * 1000) break;
+    }
+    const calendar = await Promise.all(months.map(([year, month]) => call("core_calendar_get_calendar_monthly_view",
+      { year, month, courseid: 1, categoryid: 0, includenavigation: false, mini: false, day: 1 })));
+    return JSON.stringify({ courses, events, upcoming, notices, calendar, page: location.host + location.pathname });
     """
 
     /// 月のカレンダー。引数: year, month
@@ -246,6 +255,115 @@ enum Scripts {
     return JSON.stringify({ title, header: rows[0], rows: rows.slice(1, 200).filter(r => r.some(Boolean)) });
     """
 
+    /// コースのページを開き、Google フォームなど外部フォームへのリンクを持つ活動を探す（ページの環境で実行）。
+    /// 引数: ids（コース ID）、known（前回までに確かめた URL の活動。cm → フォームの URL か ""）
+    /// カレンダーに締切が載らない「URL」「ページ」「ラベル」に置かれたフォームを見つけるため。Windows 版 scripts.js と同じ内容
+    static let moodleCourseForms = #"""
+    const FORM = /https?:\/\/(docs\.google\.com\/forms\/[^"'\s<>]+|forms\.gle\/[^"'\s<>]+|forms\.office\.com\/[^"'\s<>]+|forms\.microsoft\.com\/[^"'\s<>]+)/;
+    const HINT = /フォーム|アンケート|課題|提出|出席|レポート|回答|小テスト|form/i;
+    const root = ((window.M && M.cfg && M.cfg.wwwroot) || location.origin).replace(/\/+$/, "");
+    const clean = s => (s || "").replace(/\s+/g, " ").trim();
+    const load = async u => {
+      const r = await fetch(u, { credentials: "same-origin" });
+      return new DOMParser().parseFromString(await r.text(), "text/html");
+    };
+    const textOf = el => {
+      if (!el) return "";
+      const c = el.cloneNode(true);
+      c.querySelectorAll(".accesshide, .sr-only, .visually-hidden, script, style").forEach(e => e.remove());
+      return clean(c.textContent);
+    };
+    const formIn = el => {
+      if (!el) return null;
+      for (const a of el.querySelectorAll("a[href], [onclick]")) {
+        const m = ((a.getAttribute("href") || "") + " " + (a.getAttribute("onclick") || "")).match(FORM);
+        if (m) return m[0];
+      }
+      const m = el.innerHTML.replace(/&amp;/g, "&").match(FORM);
+      return m ? m[0] : null;
+    };
+    const stats = { courses: 0, pages: 0, activities: 0, urls: 0, opened: 0, errors: 0 };
+    const scan = async id => {
+      const doc = await load(root + "/course/view.php?id=" + id);
+      stats.courses++;
+      const docs = [doc];
+      if (!doc.querySelector("li.activity")) {
+        // 「1ページに1セクション」のコースは、セクションのページを開く
+        const links = new Set();
+        doc.querySelectorAll("a[href]").forEach(a => {
+          const h = a.getAttribute("href") || "";
+          if (/\/course\/section\.php\?id=\d+/.test(h) || new RegExp("/course/view\\.php\\?id=" + id + "&(amp;)?section=\\d+").test(h)) links.add(new URL(h.replace(/&amp;/g, "&"), root + "/").href);
+        });
+        for (const l of Array.from(links).slice(0, 30)) { try { docs.push(await load(l)); stats.pages++; } catch (e) { stats.errors++; } }
+      }
+      const out = [];
+      const seen = new Set();
+      docs.forEach(d => d.querySelectorAll("li.activity").forEach(act => {
+        const cm = (act.id.match(/module-(\d+)/) || [])[1] || act.getAttribute("data-id");
+        if (!cm || seen.has(cm)) return;
+        seen.add(cm);
+        stats.activities++;
+        const mod = (act.className.match(/modtype_([a-z]+)/) || [])[1] || "?";
+        // サブセクションは中の活動を別に数える（中のリンクを自分のものにしない）
+        if (mod === "subsection") return;
+        if (mod === "url") stats.urls++;
+        // サブセクションの中の活動は、外側のセクションの名前（回・日付）も使う
+        const secs = [];
+        for (let e = act.closest("li.section, [data-for=section]"); e; e = e.parentElement && e.parentElement.closest("li.section, [data-for=section]")) secs.push(e);
+        const sec = secs[0];
+        const link = act.querySelector('a[href*="/mod/' + mod + '/view.php"]');
+        const form = formIn(act);
+        // 開けない（利用制限中の）活動はリンクがない。ラベルはリンク先のフォームがあれば対象
+        if (!link && !form) return;
+        const name = textOf(act.querySelector(".instancename, .activityname")) || clean(act.getAttribute("data-activityname"))
+          || textOf(act).slice(0, 80);
+        if (!form && !(mod === "url" || (mod === "page" && HINT.test(name)))) return;
+        out.push({
+          course: id, cm, mod, name: name.slice(0, 200), form,
+          url: link ? new URL(link.getAttribute("href").replace(/&amp;/g, "&"), root + "/").href : null,
+          section: secs.map(e => textOf(e.querySelector(".sectionname, h3, h4"))).filter(Boolean).join(" / ").slice(0, 160),
+          current: secs.some(e => e.classList.contains("current")),
+          position: sec ? Number(sec.getAttribute("data-number") || (sec.id.match(/section-(\d+)/) || [])[1] || 0) : 0,
+          dates: textOf(act.querySelector("[data-region=activity-dates], .activity-dates")).slice(0, 200),
+          text: textOf(act.querySelector(".activity-altcontent, .contentafterlink, .description, .activity-description, .contentwithoutlink")).slice(0, 400),
+          done: !!act.querySelector('[data-toggletype="manual:undo"]'),
+        });
+      }));
+      return out;
+    };
+    const found = [];
+    for (let i = 0; i < ids.length; i += 4) {
+      const rs = await Promise.all(ids.slice(i, i + 4).map(id => scan(id).catch(() => { stats.errors++; return []; })));
+      rs.forEach(r => found.push(...r));
+    }
+    // URL・ページの活動は、そのページを開いてフォームへのリンクか確かめる
+    // 今のセクション → フォームらしい名前 → 新しい（下の）セクションの順に開く
+    // 前回までに確かめた URL の活動（cm → フォームの URL か ""）は開き直さない
+    found.forEach(f => { if (!f.form && f.url && known && Object.prototype.hasOwnProperty.call(known, f.cm)) { f.form = known[f.cm] || null; f.cached = true; } });
+    const todo = found.filter(f => !f.form && f.url && !f.cached)
+      .map(f => ({ f, k: (f.current ? 4 : 0) + (HINT.test(f.name) ? 2 : 0) }))
+      .sort((a, b) => b.k - a.k || b.f.position - a.f.position).map(x => x.f).slice(0, 500);
+    stats.skippedPages = Math.max(0, found.filter(f => !f.form && f.url && !f.cached).length - todo.length);
+    stats.cached = found.filter(f => f.cached).length;
+    for (let i = 0; i < todo.length; i += 4) {
+      await Promise.all(todo.slice(i, i + 4).map(async f => {
+        try {
+          const u = new URL(f.url);
+          if (f.mod === "url") u.searchParams.set("forceview", "1");
+          const d = await load(u.href);
+          stats.opened++;
+          f.checked = true;
+          const main = d.querySelector("#region-main") || d.querySelector("[role=main]") || d.body;
+          f.form = formIn(main && main.querySelector(".urlworkaround")) || formIn(main);
+          if (f.form && !f.text) f.text = textOf(main).slice(0, 400);
+        } catch (e) { stats.errors++; }
+      }));
+    }
+    const checked = {};
+    found.forEach(f => { if (f.checked) checked[f.cm] = f.form || ""; });
+    return JSON.stringify({ forms: found.filter(f => f.form), checked, stats });
+    """#
+
     /// 課題・アンケートのページを開いて提出状況を確かめる（.page で実行）。引数: urls
     /// 戻り値には、当てはまった判定用の文言（下の一覧のどれか）だけを入れる。ページの内容は返さない
     static let moodleSubmissionStatus = """
@@ -328,6 +446,7 @@ enum MoodleParser {
         let events: Result<EventsData>?
         let upcoming: Result<EventsData>?
         let notices: Result<NoticesData>?
+        let calendar: [Result<MonthData>]?
     }
     struct MonthBundle: Decodable {
         let fatal: String?
@@ -336,7 +455,7 @@ enum MoodleParser {
     struct CoursesData: Decodable { let courses: [C] }
     struct C: Decodable {
         let id: Int; let fullname: String; let shortname: String
-        let coursecategory: String?; let progress: Double?; let viewurl: String?; let hidden: Bool?
+        let coursecategory: String?; let progress: Double?; let viewurl: String?; let hidden: Bool?; let enddate: Int?
     }
     struct EventsData: Decodable { let events: [E] }
     /// action / upcoming / monthly で共通の予定（無い項目もあるので省略可能にする）
@@ -410,7 +529,8 @@ enum MoodleParser {
         let courses = rawCourses.filter { $0.hidden != true }.map {
             Course(id: $0.id, fullName: $0.fullname.plainText, shortName: $0.shortname.plainText,
                    category: $0.coursecategory?.plainText, progress: $0.progress,
-                   url: link($0.viewurl) ?? config.moodleCourse(id: $0.id))
+                   url: link($0.viewurl) ?? config.moodleCourse(id: $0.id),
+                   endDate: ($0.enddate ?? 0) > 0 ? Date(timeIntervalSince1970: TimeInterval($0.enddate ?? 0)) : nil)
         }
         // 「開始」の予定は締切ではない。過ぎた予定は、まだ操作できる（遅れて提出できる）ものだけ残す
         let now = Date.now
@@ -438,10 +558,142 @@ enum MoodleParser {
             MoodleNotice(id: $0.id, subject: $0.subject.plainText, time: Date(timeIntervalSince1970: TimeInterval($0.timecreated)),
                          read: $0.read, url: link($0.contexturl))
         }
+        // 月のカレンダーにだけある締切（提出ボタンのない課題など）。ページに外部フォームがあれば締切に加える（AppStore.checkSubmissions）
+        var known = Set(rawEvents.map(\.id))
+        var calendarDue: [Deadline] = []
+        for m in b.calendar ?? [] {
+            for w in m.data?.weeks ?? [] { for d in w.days { for e in d.events ?? [] {
+                guard !known.contains(e.id), isDue(e), e.modulename != nil else { continue }
+                known.insert(e.id)
+                let due = Date(timeIntervalSince1970: TimeInterval(e.timesort ?? e.timestart ?? 0))
+                if due >= now {
+                    calendarDue.append(Deadline(id: "m-\(e.id)", title: e.name.plainText, course: e.course?.fullname.plainText,
+                                                due: due, url: link(e.url), needsAction: true, module: e.modulename))
+                }
+            } } }
+        }
         return MoodleSnapshot(courses: courses, deadlines: deadlines.sorted { $0.due < $1.due },
                               upcoming: rawUpcoming.map { item($0, link: link) }.sorted { $0.start < $1.start },
                               notices: notices,
-                              unreadCount: n?.unreadcount ?? notices.filter { !$0.read }.count, warnings: warnings)
+                              unreadCount: n?.unreadcount ?? notices.filter { !$0.read }.count, warnings: warnings,
+                              calendarDue: calendarDue)
+    }
+
+    // MARK: - コースのページで見つけたフォーム（Windows 版 parsers.js の parseCourseForms と同じ規則）
+
+    struct FormsBundle: Decodable {
+        let forms: [F]?
+        let checked: [String: String]?
+        let stats: Stats?
+        struct F: Decodable {
+            let course: Int; let cm: String; let mod: String?; let name: String?; let form: String?; let url: String?
+            let section: String?; let current: Bool?; let position: Int?; let dates: String?; let text: String?; let done: Bool?
+        }
+        struct Stats: Decodable {
+            let courses: Int?; let activities: Int?; let urls: Int?; let opened: Int?; let cached: Int?; let skippedPages: Int?; let errors: Int?
+        }
+    }
+
+    struct CourseForms {
+        var deadlines: [Deadline] = []
+        var forms: [MoodleForm] = []
+        var stats: FormsBundle.Stats?
+        var skipped = 0
+        var checked: [String: String] = [:]
+    }
+
+    /// /mod/xxx/view.php?id=123 → "123"（同じ活動かどうかの照合用）
+    static func cmID(_ u: URL?) -> String? {
+        guard let u, u.path.range(of: #"/mod/[a-z]+/view\.php$"#, options: .regularExpression) != nil else { return nil }
+        return URLComponents(url: u, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "id" }?.value
+    }
+
+    /// 活動の日付欄（「開始: … 期限: 2026年 12月 2日(水曜日) 23:59」）から締切を読む
+    static func activityDue(_ dates: String?, now: Date) -> Date? {
+        let t = (dates ?? "").replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+        let all = DateExtractor.findAll(in: t, reference: now)
+        guard let first = all.first else { return nil }
+        let marker = #"(期限|終了|締切|締め切り|Due|Closes?)[:：]?$"#
+        if let hit = all.first(where: { String(t[..<$0.range.lowerBound].suffix(8)).range(of: marker, options: [.regularExpression, .caseInsensitive]) != nil }) {
+            return hit.date
+        }
+        if all.count > 1 { return all.last?.date }
+        return String(t[..<first.range.lowerBound]).range(of: #"(開始|Opens?)[:：]?$"#, options: [.regularExpression, .caseInsensitive]) != nil ? nil : first.date
+    }
+
+    /// moodleCourseForms の結果を、締切のあるフォーム（deadlines）と、締切の書かれていないフォーム（forms）に分ける。
+    /// - 締切：活動の日付欄 → 名前の「締切：12月2日」→ 説明文の「〜まで」のすぐ近くの日付。
+    ///   「次回授業前日」「次回授業開始前まで」はセクションの日の6日後 23:59、「15:30まで」のような時刻だけはセクションの日のその時刻。
+    ///   過ぎたもの・表示期間より先のものは出さない
+    /// - 締切なし：1か月以上前の回は出さない。今のセクション（Moodle の強調表示）か、セクションの日が今日を含む前6日〜7日後か、
+    ///   セクションに日付がないコースでは一番新しいセクションのものを recent にする
+    static func parseCourseForms(_ json: String, config: UniversityConfig, courses: [Course], known: Set<String>,
+                                 now: Date = .now, windowDays: Int = 30, calendar: Calendar = .current) -> CourseForms {
+        guard let data = json.data(using: .utf8), let b = try? JSONDecoder().decode(FormsBundle.self, from: data) else { return CourseForms() }
+        let link = linker(config)
+        let byID = Dictionary(courses.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var seen = known
+        var out = CourseForms(stats: b.stats, checked: b.checked ?? [:])
+        let day: TimeInterval = 86400
+        func sectionDate(_ s: String?) -> Date? {
+            let t = (s ?? "").precomposedStringWithCompatibilityMapping.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+            guard var d = DateExtractor.findAll(in: t, reference: now, calendar: calendar).first?.date else { return nil }
+            // セクション名の日付は授業の日。2か月より先になるなら前の年とみなす（「6月2日」→ 今年の6月）
+            if d > now.addingTimeInterval(60 * day) { d = calendar.date(byAdding: .year, value: -1, to: d) ?? d }
+            return d
+        }
+        let startToday = calendar.startOfDay(for: now)
+        var undated: [(f: FormsBundle.F, item: MoodleForm, sdate: Date?)] = []
+        for f in b.forms ?? [] {
+            guard let formURL = f.form.flatMap(SafeURL.https) else { continue }
+            let url = link(f.url)
+            let key = cmID(url) ?? "form:\(formURL.absoluteString)"
+            guard seen.insert(key).inserted else { continue }
+            let course = byID[f.course]
+            let title = (f.name ?? "").plainText.nilIfEmpty ?? "フォーム"
+            let nt = title.precomposedStringWithCompatibilityMapping
+            let sdate = sectionDate(f.section)
+            var due = activityDue(f.dates, now: now)
+                ?? DateExtractor.findDeadline(in: nt, reference: now, calendar: calendar)
+                ?? DateExtractor.findMarked(in: (f.text ?? "").plainText.precomposedStringWithCompatibilityMapping, reference: now, calendar: calendar)
+            if due == nil, let sdate {
+                if nt.range(of: #"次回(の)?授業(の)?(前日|開始前|前|まで)"#, options: .regularExpression) != nil,
+                   let d = calendar.date(byAdding: .day, value: 6, to: sdate) {
+                    due = calendar.date(bySettingHour: 23, minute: 59, second: 0, of: d)
+                }
+                if due == nil, let r = nt.range(of: #"(\d{1,2}):(\d{2})\s*(まで|締切|〆切)"#, options: .regularExpression) {
+                    let nums = nt[r].split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+                    if nums.count >= 2 { due = calendar.date(bySettingHour: nums[0], minute: nums[1], second: 0, of: sdate) }
+                }
+            }
+            let status: SubmissionStatus = f.done == true ? .submitted : .form
+            if let due {
+                if due < now || due > now.addingTimeInterval(Double(windowDays) * day) { out.skipped += 1; continue }
+                out.deadlines.append(Deadline(id: "f-\(f.cm)", title: title, course: course?.fullName, due: due,
+                                              url: url ?? course?.url, needsAction: true, module: f.mod, status: status, formURL: formURL))
+            } else if let sdate, sdate < now.addingTimeInterval(-30 * day) {
+                // 1か月以上前の回のフォーム（前学期など）は、もう受け付けていないとみなす
+                out.skipped += 1
+            } else {
+                undated.append((f, MoodleForm(id: "f-\(f.cm)", title: title, course: course?.fullName, url: url ?? course?.url,
+                                              formURL: formURL, module: f.mod, status: status, recent: false,
+                                              section: (f.section ?? "").plainText.nilIfEmpty), sdate))
+            }
+        }
+        // セクション名に日付のないコースは、フォームのある一番新しい（下の）セクションを今の回とみなす
+        var latest: [Int: Int] = [:]
+        for u in undated where !undated.contains(where: { $0.f.course == u.f.course && $0.sdate != nil }) {
+            latest[u.f.course] = max(latest[u.f.course] ?? -1, u.f.position ?? 0)
+        }
+        for u in undated {
+            var item = u.item
+            let near = u.sdate.map { $0 >= startToday.addingTimeInterval(-6 * day) && $0 <= now.addingTimeInterval(7 * day) } ?? false
+            item.recent = u.f.current == true || near || latest[u.f.course] == (u.f.position ?? 0)
+            out.forms.append(item)
+        }
+        out.deadlines.sort { $0.due < $1.due }
+        out.forms = out.forms.filter(\.recent) + out.forms.filter { !$0.recent }
+        return out
     }
 
     static func parseMonth(_ json: String, config: UniversityConfig) throws -> [CalendarItem] {

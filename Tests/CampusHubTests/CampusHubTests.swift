@@ -315,3 +315,33 @@ import Testing
         #expect(!GmailClient.hasReceipt(for: d, in: [("「第9回 出席確認」の回答のコピー", due)]))
     }
 }
+
+/// コースのページで見つけた外部フォーム（Windows 版 core.test.js と同じ例）
+@Suite struct CourseFormsTests {
+    @Test func splitsDatedAndUndatedForms() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 11, day: 25, hour: 12))!
+        let base = "https://moodle2026.shonan-it.ac.jp"
+        let courses = [Course(id: 5, fullName: "情報数理", shortName: "IM", url: URL(string: base + "/course/view.php?id=5"))]
+        func f(_ cm: Int, _ name: String, section: String = "", text: String = "") -> [String: Any] {
+            ["course": 5, "cm": String(cm), "mod": "url", "name": name, "form": "https://docs.google.com/forms/d/e/x\(cm)/viewform",
+             "url": base + "/mod/url/view.php?id=\(cm)", "section": section, "current": false, "position": 1, "dates": "", "text": text, "done": false]
+        }
+        let forms = [
+            f(1, "第8回 課題（12/1まで）"),
+            f(13, "提出課題（締切：次回授業前日夜23:59まで）", section: "第９回 11月25日", text: "第９回 11月25日 の資料"),
+            f(14, "#7 課題", section: "DS入門1 #7 データを読む (1)（6月2日）"),
+            f(3, "出席登録", section: "第９回 11月25日"),
+            f(16, "出席登録", section: "第８回 11月18日"),
+        ]
+        let json = String(data: try! JSONSerialization.data(withJSONObject: ["forms": forms]), encoding: .utf8)!
+        let r = MoodleParser.parseCourseForms(json, config: DefaultConfig.university, courses: courses, known: [], now: now, windowDays: 30, calendar: cal)
+        #expect(Set(r.deadlines.map(\.id)) == ["f-1", "f-13"])
+        #expect(r.deadlines.first { $0.id == "f-13" }?.due == cal.date(from: DateComponents(year: 2026, month: 12, day: 1, hour: 23, minute: 59)))
+        #expect(r.skipped == 1)
+        #expect(r.forms.first { $0.id == "f-3" }?.recent == true)
+        #expect(r.forms.first { $0.id == "f-16" }?.recent == false)
+        #expect(GmailClient.hasReceipt(title: "第8回 出席確認", due: nil, in: [("「第8回 出席確認」の回答のコピー", .distantPast)]))
+    }
+}

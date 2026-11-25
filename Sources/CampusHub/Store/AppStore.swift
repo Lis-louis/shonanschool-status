@@ -262,6 +262,11 @@ final class AppStore {
                                   url: d.formURL ?? d.url ?? config.moodleUpcoming, reason: reason,
                                   overdueHint: overdue && d.needsAction && d.status != .form && d.status != .notOpenYet))
         }
+        // コースのページにある、締切の書かれていないフォーム（今の回のものだけ。前の回のものは Moodle 画面にまとめる）
+        for f in moodle.value?.forms ?? [] where f.recent && !f.status.isDone {
+            items.append(TodoItem(id: f.id, title: f.title, detail: f.course, due: nil, source: .moodle, url: f.formURL ?? f.url,
+                                  reason: "外部フォームです（締切の記載なし）。提出したかはアプリから分からないので、済んだらチェックしてください"))
+        }
         for m in mail.value?.messages ?? [] where m.category == .action {
             if let due = m.dueDate, due < now.addingTimeInterval(-14 * 86400) { continue }
             if m.dueDate == nil && m.date < now.addingTimeInterval(-21 * 86400) { continue }
@@ -366,10 +371,13 @@ final class AppStore {
         campus = .loading
         // 未連携ならすぐに案内を出す（他の読み込みを待たない）
         mail = googleSignedIn ? .loading : await fetchMail()
+        moodleGen += 1
         async let m = fetchMoodle()
         async let c = fetchCampus()
         async let g = fetchMail()
         moodle = await m
+        // コースのページを見て回るのは時間がかかる（URL の活動が数百件）ので、締切を先に出してから裏で行う
+        if moodle.value != nil { Task { await scanCourseForms() } }
         campus = await c
         mail = await g
         monthItems = [:]
@@ -406,6 +414,8 @@ final class AppStore {
             guard let json = raw as? String else { log("読み取りスクリプトの結果が空です", false); throw MoodleParser.ParseError.invalid }
             var snap = try MoodleParser.parse(json, config: config, log: log)
             await checkSubmissions(&snap, session: s, log: log)
+            snap.calendarDue = []
+            snap.formsLoading = true
             return .loaded(snap)
         } catch WebError.needsLogin {
             return .notConfigured(WebError.needsLogin.localizedDescription)
@@ -420,8 +430,12 @@ final class AppStore {
         let targets = snap.deadlines.filter { $0.url != nil }.prefix(60)
         // 通知（「提出期限 …: 第7回課題」など）も、リンク先が課題などのページなら同じように確かめる
         let noticeIdx = snap.notices.indices.filter { snap.notices[$0].linksToActivity }
+        // 月のカレンダーにだけある締切（表示期間内）。ページに外部フォームがあれば締切に加える
+        let limit = Date.now.addingTimeInterval(Double(prefs.deadlineWindowDays) * 86400)
+        let calendarDue = Array(snap.calendarDue.filter { $0.url != nil && $0.due <= limit }.prefix(40))
         var urls: [String] = []
-        for u in targets.compactMap({ $0.url?.absoluteString }) + noticeIdx.compactMap({ snap.notices[$0].url?.absoluteString }) where !urls.contains(u) {
+        for u in targets.compactMap({ $0.url?.absoluteString }) + noticeIdx.compactMap({ snap.notices[$0].url?.absoluteString })
+            + calendarDue.compactMap({ $0.url?.absoluteString }) where !urls.contains(u) {
             urls.append(u)
         }
         guard !urls.isEmpty else { return }
@@ -441,6 +455,16 @@ final class AppStore {
                 guard let u = snap.notices[i].url?.absoluteString, let r = byURL[u] else { continue }
                 snap.notices[i].status = SubmissionStatus(rawValue: r.status) ?? .unknown
             }
+            var added = 0
+            for var d in calendarDue {
+                guard let u = d.url?.absoluteString, let r = byURL[u], r.status == "form" else { continue }
+                d.status = .form
+                d.formURL = r.form.flatMap(SafeURL.https)
+                snap.deadlines.append(d)
+                added += 1
+            }
+            if !calendarDue.isEmpty { log("カレンダーにだけある締切 \(calendarDue.count)件のうち、外部フォームの課題 \(added)件を追加", true) }
+            snap.deadlines.sort { $0.due < $1.due }
             // 何の文言で判定したかを集計してログに残す（内容は残さない）
             let summary = Dictionary(grouping: results, by: { "\($0.status):\($0.hit)" }).map { "\($0.key)×\($0.value.count)" }.sorted()
             log("提出状況の確認 \(results.count)件: " + summary.joined(separator: " / "), true)
@@ -450,19 +474,57 @@ final class AppStore {
             }
         } catch {
             log("提出状況の確認に失敗: \(error.localizedDescription)", false)
-            return
         }
+    }
 
-        // 同じ課題の締切が「控えメールあり」になったら、その通知も回答済みにする（関数を抜けるときに反映）
-        defer {
-            let receipted = Set(snap.deadlines.filter { $0.status == .formReceipt }.compactMap { $0.url?.absoluteString })
-            for i in noticeIdx where snap.notices[i].url.map({ receipted.contains($0.absoluteString) }) ?? false {
-                snap.notices[i].status = .formReceipt
+    /// Moodle の読み込みごとに増やす（裏で確認している間に更新し直したら、古い結果は使わない）
+    private var moodleGen = 0
+    /// URL の活動のリンク先は変わらないので、確かめた結果（cm → フォームの URL か ""）を覚えておき、次からは開かない
+    private var formCache: [String: String] = [:]
+
+    /// コースのページから、カレンダーに載らないフォーム（「URL」「ページ」「ラベル」に置かれた Google フォームなど）を探し、
+    /// 締切のあるものは締切に、ないものは forms に入れる。そのあと外部フォームを Gmail の控えメールと照合する
+    private func scanCourseForms() async {
+        guard var snap = moodle.value else { return }
+        let gen = moodleGen
+        let s = session(.moodle)
+        let log: (String, Bool) -> Void = { [weak self] m, ok in self?.diag("Moodle", m, ok: ok) }
+        let now = Date.now
+        let ids = snap.courses.filter { c in
+            !hiddenCourseIDs.contains(c.id) && (c.endDate.map { $0 > now.addingTimeInterval(-14 * 86400) } ?? true)
+        }.map(\.id).prefix(40)
+        if !ids.isEmpty {
+            do {
+                let raw = try await s.run(Scripts.moodleCourseForms, args: ["ids": Array(ids), "known": formCache], world: .page)
+                let known = Set(snap.deadlines.compactMap { MoodleParser.cmID($0.url) ?? $0.formURL.map { "form:\($0.absoluteString)" } })
+                let r = MoodleParser.parseCourseForms(raw as? String ?? "", config: config, courses: snap.courses, known: known,
+                                                      now: now, windowDays: prefs.deadlineWindowDays)
+                formCache.merge(r.checked) { _, new in new }
+                snap.deadlines = (snap.deadlines + r.deadlines).sorted { $0.due < $1.due }
+                snap.forms = r.forms
+                let st = r.stats
+                var pages = "活動 \(st?.activities ?? 0)件・URL \(st?.urls ?? 0)件・開いたページ \(st?.opened ?? 0)件"
+                if let c = st?.cached, c > 0 { pages += "・確認済み \(c)件" }
+                if let k = st?.skippedPages, k > 0 { pages += "・開かなかった \(k)件" }
+                if let e = st?.errors, e > 0 { pages += "・失敗 \(e)件" }
+                log("コースのページ \(st?.courses ?? 0)件（\(pages)）から外部フォーム: 締切あり \(r.deadlines.count)件・締切の記載なし \(r.forms.count)件"
+                    + "（うち今の回 \(r.forms.filter(\.recent).count)件）・締切を過ぎた／1か月以上前の回／表示期間より先 \(r.skipped)件", (st?.errors ?? 0) == 0)
+            } catch {
+                log("コースのページからフォームを探せませんでした: \(error.localizedDescription)", false)
             }
         }
-        // 外部フォーム：Gmail に Google フォームの控えがあれば回答済みとみなす
+        if gen == moodleGen { await checkFormReceipts(&snap, log: log) }
+        snap.formsLoading = false
+        guard gen == moodleGen, moodle.value != nil else { return }
+        moodle = .loaded(snap)
+        await updateNotifications()
+    }
+
+    /// 外部フォーム：Gmail に Google フォームの控え（回答のコピー）があれば回答済みとみなす
+    private func checkFormReceipts(_ snap: inout MoodleSnapshot, log: (String, Bool) -> Void) async {
         let forms = snap.deadlines.indices.filter { snap.deadlines[$0].status == .form }
-        guard !forms.isEmpty, googleSignedIn else { return }
+        let undated = snap.forms.indices.filter { snap.forms[$0].status == .form }
+        guard !forms.isEmpty || !undated.isEmpty, googleSignedIn else { return }
         do {
             let token = try await google.validAccessToken(clientID: config.mail.googleClientID)
             let receipts = try await GmailClient(token: token).formReceipts()
@@ -471,9 +533,19 @@ final class AppStore {
                 snap.deadlines[i].status = .formReceipt
                 matched += 1
             }
-            log("フォームの控えメール \(receipts.count)通と照合: \(matched)/\(forms.count)件が回答済み", true)
+            for i in undated where GmailClient.hasReceipt(title: snap.forms[i].title, due: nil, in: receipts) {
+                snap.forms[i].status = .formReceipt
+                matched += 1
+            }
+            log("フォームの控えメール \(receipts.count)通と照合: \(matched)/\(forms.count + undated.count)件が回答済み", true)
         } catch {
             log("フォームの控えメールを確認できませんでした: \(error.localizedDescription)", false)
+        }
+        // 同じ課題の締切が「控えメールあり」になったら、その通知も回答済みにする
+        let receipted = Set(snap.deadlines.filter { $0.status == .formReceipt }.compactMap { $0.url?.absoluteString })
+        for i in snap.notices.indices where snap.notices[i].linksToActivity
+            && (snap.notices[i].url.map { receipted.contains($0.absoluteString) } ?? false) {
+            snap.notices[i].status = .formReceipt
         }
     }
 

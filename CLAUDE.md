@@ -84,6 +84,31 @@ Mac で `swift build`（または `scripts/build-app.sh`）を通し、動作を
   - `Tests/CampusHubTests/CampusHubTests.swift`：`TimetableCourseTests` を追加（未実行）
 - 確認手順：ホームの「今日の授業」と Campus Square の「時間割」で、コマの右に「Moodle」が出て、押すとそのコースが開くこと。
 
+### 2026-11-25：コースのページに置かれた Google フォームの課題を読み込む（0.3.7）
+- 発端：Google フォームの提出課題が表示されていなかった。締切はカレンダー（未完了の課題）からしか読んでおらず、
+  コースのページに「URL」リソースやラベルのリンクとして置かれたフォームは一度も見ていなかった（診断ログで外部フォーム 0件）。
+- Windows 版で修正・実データで確認済み：
+  - `scripts.js` の `moodleCourseForms`：受講中のコース（非表示・終了したものは除く）のページを開き、外部フォームへのリンクを持つ活動を探す。
+    URL の活動は `mod/url/view.php?id=…&forceview=1` を開いてリンク先を確かめる（今のセクション・フォームらしい名前・新しいセクションの順、最大500件）。
+    確かめた結果は `store.formCache` に覚えて次からは開かない。サブセクション（Moodle 4.5）は中の活動を別に数え、外側のセクション名も使う。
+  - `parsers.js` の `parseCourseForms`：締切は 日付欄 → 名前の「締切：12月2日」→ 説明文の「〜まで」のすぐ近くの日付（`findMarked`）。
+    「次回授業前日」「次回授業開始前まで」はセクションの日の6日後 23:59、「15:30まで」はセクションの日のその時刻。
+    セクション名の日付は授業の日なので、2か月より先になるなら前の年（「6月2日」→ 今年の6月）。1か月以上前の回・締切を過ぎたものは出さない。
+    締切の書かれていないものは `snap.forms`（今の回＝ recent だけホームの「やること」へ、前の回は Moodle 画面に折りたたむ）。
+  - `moodleFetch` で月のカレンダーも読み、「未完了の課題」に出ない締切（提出ボタンのない課題）のページに外部フォームがあれば締切に加える。
+  - コースのページの確認は時間がかかる（実データで URL 401件・約50秒）ので、締切を先に表示して裏で行う（`scanCourseForms`）。
+  - 実データ：「提出課題（締切：11月25日 23:59）」「提出課題（締切：次回授業前日夜23:59まで）→ 12/1 23:59」など4件が締切つきで出た。前学期のフォームは出ない。
+- Mac 版に同じ変更を入れた：
+  - `Web/Scripts.swift`：`moodleCourseForms`・`moodleFetch` は Windows 版と同一の文字列。`MoodleParser.parseCourseForms`・`activityDue`・`cmID`
+    → **Windows の swiftc で Domain・Config・MailClassifier・Scripts をコンパイルし、Windows 版のテストと同じ例で同じ結果になることを確認済み**
+  - `Models/Domain.swift`：`MoodleForm`、`MoodleSnapshot.calendarDue・forms・formsLoading`、`Course.endDate`
+  - `Services/MailClassifier.swift`：`DateExtractor.findMarked`、`Services/Google/GmailClient.swift`：`hasReceipt(title:due:in:)`
+  - `Store/AppStore.swift`：`checkSubmissions` でカレンダーだけの締切も確認、`scanCourseForms`（裏で実行・`formCache`）・`checkFormReceipts`、`todos` にフォーム（**未ビルド**）
+  - `Views/Components.swift`：`FormRow`、`Views/ServicePages.swift`：課題・締切カードにフォームを表示（**未ビルド**）
+  - `Tests/CampusHubTests/CampusHubTests.swift`：`CourseFormsTests`（未実行）
+- 確認手順：Moodle 画面の「課題・締切」に Google フォームの提出課題が締切つきで出ること。読み込み直後は「…確認しています…」が出て、しばらくすると増えること。
+  診断ログに「コースのページ N件（…）から外部フォーム: 締切あり …」が出ること。
+
 ### 2026-11-24：ホームの「やること」を今週の分だけにする
 - Windows 版で実装・実データで確認済み（0.3.3）：`logic.js` の `todos(S, …, { thisWeek: true })`（ホームだけ。Moodle 画面の「課題・締切」は従来どおり全部）。
   - 受付開始前（notOpenYet）は出さない。「あと○日」（切り捨て）が 8 以上の Moodle の締切は出さない（メール由来は対象外）。

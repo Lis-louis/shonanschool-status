@@ -96,6 +96,16 @@ enum DateExtractor {
         return out.sorted { $0.range.lowerBound < $1.range.lowerBound }
     }
 
+    /// 「まで」「締切」などのすぐ近くにある日付だけを返す（長い文の中の関係ない日付を拾わない）
+    static func findMarked(in text: String, reference: Date, calendar: Calendar = .current) -> Date? {
+        for f in findAll(in: text, reference: reference, calendar: calendar) {
+            let around = text[f.range.lowerBound...].prefix(24)
+            let before = text[..<f.range.lowerBound].suffix(10)
+            if deadlineMarkers.contains(where: { around.contains($0) || before.contains($0) }) { return f.date }
+        }
+        return nil
+    }
+
     /// 「まで」「締切」などの近くにある日付を優先して1つ返す
     static func findDeadline(in text: String, reference: Date, calendar: Calendar = .current) -> Date? {
         let all = findAll(in: text, reference: reference, calendar: calendar)

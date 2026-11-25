@@ -23,20 +23,41 @@ struct MoodleSummary: View {
                 StateContent(state: store.moodle, service: .moodle) { snap in
                     let open = snap.deadlines.filter { !$0.status.isDone }
                     let done = snap.deadlines.filter(\.status.isDone)
-                    if open.isEmpty {
+                    // コースのページで見つけた、締切の書かれていないフォーム。今の回のものは一覧に、前の回のものは折りたたむ
+                    let recent = snap.forms.filter { $0.recent && !$0.status.isDone }
+                    let older = snap.forms.filter { !$0.recent && !$0.status.isDone }
+                    let doneForms = snap.forms.filter(\.status.isDone)
+                    if open.isEmpty && recent.isEmpty {
                         StatusMessage(kind: .info, message: "提出が必要な課題はありません。")
                     } else {
                         ForEach(open) { d in
                             DeadlineRow(deadline: d) { store.openInApp(d.url ?? c.moodleUpcoming, service: .moodle) }
                         }
+                        ForEach(recent) { f in
+                            FormRow(form: f) { store.openInApp(f.url ?? c.moodleUpcoming, service: .moodle) }
+                        }
                     }
-                    if !done.isEmpty {
-                        DisclosureGroup("提出済み・回答済み（\(done.count)件）") {
-                            ForEach(done) { d in
-                                DeadlineRow(deadline: d) { store.openInApp(d.url ?? c.moodleUpcoming, service: .moodle) }
+                    if !older.isEmpty {
+                        DisclosureGroup("前の回などの、締切の書かれていないフォーム（\(older.count)件）") {
+                            ForEach(older) { f in
+                                FormRow(form: f) { store.openInApp(f.url ?? c.moodleUpcoming, service: .moodle) }
                             }
                         }
                         .font(.system(.callout, design: .rounded)).foregroundStyle(p.subtle)
+                    }
+                    if !done.isEmpty || !doneForms.isEmpty {
+                        DisclosureGroup("提出済み・回答済み（\(done.count + doneForms.count)件）") {
+                            ForEach(done) { d in
+                                DeadlineRow(deadline: d) { store.openInApp(d.url ?? c.moodleUpcoming, service: .moodle) }
+                            }
+                            ForEach(doneForms) { f in
+                                FormRow(form: f) { store.openInApp(f.url ?? c.moodleUpcoming, service: .moodle) }
+                            }
+                        }
+                        .font(.system(.callout, design: .rounded)).foregroundStyle(p.subtle)
+                    }
+                    if snap.formsLoading {
+                        Text("コースのページにある Google フォームなどを確認しています…").font(.caption).foregroundStyle(p.subtle)
                     }
                     Warnings(items: snap.warnings)
                 }

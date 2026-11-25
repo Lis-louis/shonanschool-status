@@ -92,11 +92,17 @@ struct GmailClient: Sendable {
 
     /// 控えメールの中に課題名があり、日付が締切の前後なら「回答済み」とみなす
     static func hasReceipt(for d: Deadline, in receipts: [(text: String, date: Date)]) -> Bool {
-        let core = coreTitle(d.title)
+        hasReceipt(title: d.title, due: d.due, in: receipts)
+    }
+
+    /// 締切の書かれていないフォーム（due が nil）は、控えメールの日付を問わない（控えメールは180日分）
+    static func hasReceipt(title: String, due: Date?, in receipts: [(text: String, date: Date)]) -> Bool {
+        let core = coreTitle(title)
         guard core.count >= 3 else { return false }
         return receipts.contains { r in
-            r.text.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression).contains(core)
-                && r.date > d.due.addingTimeInterval(-21 * 86400) && r.date < d.due.addingTimeInterval(86400)
+            guard r.text.replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression).contains(core) else { return false }
+            guard let due else { return true }
+            return r.date > due.addingTimeInterval(-21 * 86400) && r.date < due.addingTimeInterval(86400)
         }
     }
 

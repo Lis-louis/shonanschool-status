@@ -253,6 +253,15 @@ function todos(S, includeDone = false, now = Date.now(), { thisWeek = false } = 
       overdueHint: overdue && d.needsAction && d.status !== 'form' && d.status !== 'notOpenYet',
     });
   }
+  // コースのページにある、締切の書かれていないフォーム（今の回のものだけ。前の回のものは Moodle 画面にまとめる）
+  for (const f of S.moodle.value?.forms ?? []) {
+    if (!f.recent || SubmissionStatus.isDone(f.status)) continue;
+    items.push({
+      id: f.id, title: f.title, detail: f.course, due: null, source: 'moodle', url: f.formURL ?? f.url,
+      reason: '外部フォームです（締切の記載なし）。提出したかはアプリから分からないので、済んだらチェックしてください',
+      overdueHint: false,
+    });
+  }
   for (const m of S.mail.value?.messages ?? []) {
     if (m.category !== 'action') continue;
     if (m.dueDate != null && m.dueDate < now - 14 * DAY) continue;

@@ -356,6 +356,11 @@ class AppStore {
       if (typeof raw !== 'string') { log('読み取りスクリプトの結果が空です', false); throw new Error('Moodleの応答を読み取れませんでした。'); }
       const snap = Parsers.parseMoodle(raw, this.config, log);
       await this.checkSubmissions(snap, s, log);
+      delete snap.calendarDue;
+      // コースのページを見て回るのは時間がかかる（URL の活動が数百件）ので、締切を先に出してから裏で行う
+      snap.forms = [];
+      snap.formsLoading = true;
+      this.scanCourseForms(snap, s, log);
       return loaded(snap);
     } catch (e) {
       if (e instanceof WebError && e.kind === 'needsLogin') return notConfigured(e.message);
@@ -369,7 +374,10 @@ class AppStore {
   async checkSubmissions(snap, s, log) {
     const targets = snap.deadlines.filter(d => d.url).slice(0, 60);
     const noticeTargets = snap.notices.filter(n => n.url && Parsers.isActivityURL(n.url));
-    const urls = [...new Set([...targets.map(d => d.url), ...noticeTargets.map(n => n.url)])];
+    // 月のカレンダーにだけある締切（表示期間内）。ページに外部フォームがあれば締切に加える
+    const limit = Date.now() + this.prefs.deadlineWindowDays * 86400e3;
+    const calendarDue = (snap.calendarDue ?? []).filter(d => d.url && d.due <= limit).slice(0, 40);
+    const urls = [...new Set([...targets.map(d => d.url), ...noticeTargets.map(n => n.url), ...calendarDue.map(d => d.url)])];
     if (!urls.length) return;
     try {
       const raw = await s.run(Scripts.moodleSubmissionStatus, { urls }, 'page');
@@ -389,6 +397,17 @@ class AppStore {
         const r = byURL.get(n.url);
         if (r) n.status = valid.includes(r.status) ? r.status : 'unknown';
       }
+      let added = 0;
+      for (const d of calendarDue) {
+        const r = byURL.get(d.url);
+        if (r?.status !== 'form') continue;
+        d.status = 'form';
+        d.formURL = r.form ? SafeURL.https(r.form) : null;
+        snap.deadlines.push(d);
+        added++;
+      }
+      if (calendarDue.length) log(`カレンダーにだけある締切 ${calendarDue.length}件のうち、外部フォームの課題 ${added}件を追加`, true);
+      snap.deadlines.sort((a, c) => a.due - c.due);
       // 何の文言で判定したかを集計してログに残す（内容は残さない）
       const counts = {};
       for (const r of results) { const k = `${r.status}:${r.hit}`; counts[k] = (counts[k] ?? 0) + 1; }
@@ -399,11 +418,53 @@ class AppStore {
       }
     } catch (e) {
       log(`提出状況の確認に失敗: ${e.message}`, false);
-      return;
     }
+  }
 
-    // 外部フォーム：Gmail に Google フォームの控えがあれば回答済みとみなす
-    const forms = snap.deadlines.filter(d => d.status === 'form');
+  async scanCourseForms(snap, s, log) {
+    const gen = (this.formScanGen = (this.formScanGen ?? 0) + 1);
+    try {
+      await this.findCourseForms(snap, s, log);
+      if (gen === this.formScanGen) await this.checkFormReceipts(snap, log);
+    } catch (e) {
+      log(`フォームの確認に失敗: ${e.message}`, false);
+    } finally {
+      snap.formsLoading = false;
+      // 読み込み中に更新し直していたら、古い結果は使わない
+      if (gen === this.formScanGen && this.moodle.value === snap) { this.updateNotifications(); this.emit(); }
+    }
+  }
+
+  /** コースのページから、カレンダーに載らないフォーム（「URL」「ページ」「ラベル」に置かれた Google フォームなど）を探す。
+   *  非表示にしたコースと、終了したコースは見ない */
+  async findCourseForms(snap, s, log) {
+    snap.forms = [];
+    const now = Date.now();
+    const hidden = new Set(this.hiddenCourses ?? []);
+    const ids = snap.courses.filter(c => !hidden.has(c.id) && (c.endDate == null || c.endDate > now - 14 * 86400e3)).map(c => c.id).slice(0, 40);
+    if (!ids.length) return;
+    try {
+      // URL の活動のリンク先は変わらないので、確かめた結果を覚えておき、次からは開かない
+      this.formCache ??= {};
+      const raw = await s.run(Scripts.moodleCourseForms, { ids, known: this.formCache }, 'page');
+      const known = snap.deadlines.map(d => Parsers.cmID(d.url) ?? (d.formURL ? `form:${d.formURL}` : null)).filter(Boolean);
+      const r = Parsers.parseCourseForms(typeof raw === 'string' ? raw : '', this.config, snap.courses, known, now, this.prefs.deadlineWindowDays);
+      Object.assign(this.formCache, r.checked);
+      snap.deadlines.push(...r.deadlines);
+      snap.deadlines.sort((a, c) => a.due - c.due);
+      snap.forms = r.forms;
+      const st = r.stats ?? {};
+      log(`コースのページ ${st.courses ?? 0}件（活動 ${st.activities ?? 0}件・URL ${st.urls ?? 0}件・開いたページ ${st.opened ?? 0}件${st.cached ? `・確認済み ${st.cached}件` : ''}${st.skippedPages ? `・開かなかった ${st.skippedPages}件` : ''}${st.errors ? `・失敗 ${st.errors}件` : ''}）から外部フォーム: `
+        + `締切あり ${r.deadlines.length}件・締切の記載なし ${r.forms.length}件（うち今の回 ${r.forms.filter(f => f.recent).length}件）・締切を過ぎた／1か月以上前の回／表示期間より先 ${r.skipped}件`, st.errors ? false : true);
+    } catch (e) {
+      log(`コースのページからフォームを探せませんでした: ${e.message}`, false);
+    }
+  }
+
+  /** 外部フォーム：Gmail に Google フォームの控え（回答のコピー）があれば回答済みとみなす */
+  async checkFormReceipts(snap, log) {
+    const noticeTargets = snap.notices.filter(n => n.url && Parsers.isActivityURL(n.url));
+    const forms = [...snap.deadlines, ...(snap.forms ?? [])].filter(d => d.status === 'form');
     if (!forms.length || !this.googleSignedIn) return;
     try {
       const token = await this.google.validAccessToken(this.config.mail.googleClientID);

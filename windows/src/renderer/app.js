@@ -127,6 +127,17 @@ function deadlineRow(d) {
     + `<div class="small">${Fmt.mdwhm(d.due)}${d.needsAction ? '' : '（提出済みかは未確認）'}</div></div>${right}</div></button>`;
 }
 
+/** 締切の書かれていないフォーム（コースのページで見つけたもの） */
+function formRow(f) {
+  const done = SubmissionStatus.isDone(f.status);
+  const lbl = SubmissionStatus.label(f.status) ?? 'フォーム';
+  return `<button class="plain" data-act="openMoodle" data-url="${esc(f.url ?? '')}"><div class="deadline" style="--c:var(--${done ? 'ok' : 'accent2'})">`
+    + `<span class="bar"></span><div class="body"><div class="ttl">${esc(f.title)}</div>`
+    + `${f.course ? `<div class="small">${esc(f.course)}</div>` : ''}`
+    + `<div class="small">締切の記載なし${f.section ? `（${esc(f.section)}）` : ''}</div></div>`
+    + `${chip(lbl, done ? 'ok' : 'warn', done ? 'checkCircle' : 'question')}</div></button>`;
+}
+
 function linkRow(title, ic, act, data, sub, external) {
   return `<button class="plain" data-act="${act}"${Object.entries(data).map(([k, v]) => attr(k, v)).join('')}><div class="linkrow">`
     + `<span class="ic">${icon(ic)}</span><span class="t">${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ''}</span>`
@@ -325,8 +336,16 @@ function moodleView() {
     body: stateContent(S.moodle, 'moodle', snap => {
       const open = snap.deadlines.filter(d => !SubmissionStatus.isDone(d.status));
       const done = snap.deadlines.filter(d => SubmissionStatus.isDone(d.status));
-      let h = open.length ? open.map(deadlineRow).join('') : statusMsg('info', '提出が必要な課題はありません。');
-      if (done.length) h += `<details><summary>提出済み・回答済み（${done.length}件）</summary><div class="stack">${done.map(deadlineRow).join('')}</div></details>`;
+      // コースのページで見つけた、締切の書かれていないフォーム。今の回のものは一覧に、前の回のものは折りたたむ
+      const forms = snap.forms ?? [];
+      const recent = forms.filter(f => f.recent && !SubmissionStatus.isDone(f.status));
+      const older = forms.filter(f => !f.recent && !SubmissionStatus.isDone(f.status));
+      const doneForms = forms.filter(f => SubmissionStatus.isDone(f.status));
+      let h = open.length || recent.length ? open.map(deadlineRow).join('') + recent.map(formRow).join('')
+        : statusMsg('info', '提出が必要な課題はありません。');
+      if (older.length) h += `<details><summary>前の回などの、締切の書かれていないフォーム（${older.length}件）</summary><div class="stack">${older.map(formRow).join('')}</div></details>`;
+      if (done.length || doneForms.length) h += `<details><summary>提出済み・回答済み（${done.length + doneForms.length}件）</summary><div class="stack">${done.map(deadlineRow).join('')}${doneForms.map(formRow).join('')}</div></details>`;
+      if (snap.formsLoading) h += '<div class="small">コースのページにある Google フォームなどを確認しています…</div>';
       return h + warnings(snap.warnings);
     }),
   });

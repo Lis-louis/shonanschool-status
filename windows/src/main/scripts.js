@@ -61,7 +61,16 @@ const [courses, events, upcoming, notices] = await Promise.all([
   call("message_popup_get_popup_notifications",
        { useridto: 0, newestfirst: 1, limit: 20, offset: 0 })
 ]);
-return JSON.stringify({ courses, events, upcoming, notices, page: location.host + location.pathname });
+// 「未完了の課題」には、提出ボタンのない課題（説明文に外部フォームのリンクだけがあるもの）が出ない。
+// 月のカレンダーの締切も読み、あとでそのページにフォームがあるか確かめる
+const months = [];
+for (let d = new Date(from * 1000); months.length < 4; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+  months.push([d.getFullYear(), d.getMonth() + 1]);
+  if (new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() > to * 1000) break;
+}
+const calendar = await Promise.all(months.map(([year, month]) => call("core_calendar_get_calendar_monthly_view",
+  { year, month, courseid: 1, categoryid: 0, includenavigation: false, mini: false, day: 1 })));
+return JSON.stringify({ courses, events, upcoming, notices, calendar, page: location.host + location.pathname });
 `;
 
 /** 月のカレンダー。引数: year, mon */
@@ -287,6 +296,116 @@ for (let i = 0; i < urls.length; i += 4) {
 return JSON.stringify(out);
 `;
 
+/** コースのページを開き、Google フォームなど外部フォームへのリンクを持つ活動を探す（ページの環境で実行）。
+ *  引数: ids（コース ID）、known（前回までに確かめた URL の活動。cm → フォームの URL か ""）
+ *  カレンダーに締切が載らない「URL」「ページ」「ラベル」に置かれたフォームを見つけるため。
+ *  URL・ページの活動は、そのページも開いてリンク先を確かめる（URL は forceview=1 でフォームへ飛ばずにページを開く） */
+const moodleCourseForms = String.raw`
+const FORM = /https?:\/\/(docs\.google\.com\/forms\/[^"'\s<>]+|forms\.gle\/[^"'\s<>]+|forms\.office\.com\/[^"'\s<>]+|forms\.microsoft\.com\/[^"'\s<>]+)/;
+const HINT = /フォーム|アンケート|課題|提出|出席|レポート|回答|小テスト|form/i;
+const root = ((window.M && M.cfg && M.cfg.wwwroot) || location.origin).replace(/\/+$/, "");
+const clean = s => (s || "").replace(/\s+/g, " ").trim();
+const load = async u => {
+  const r = await fetch(u, { credentials: "same-origin" });
+  return new DOMParser().parseFromString(await r.text(), "text/html");
+};
+const textOf = el => {
+  if (!el) return "";
+  const c = el.cloneNode(true);
+  c.querySelectorAll(".accesshide, .sr-only, .visually-hidden, script, style").forEach(e => e.remove());
+  return clean(c.textContent);
+};
+const formIn = el => {
+  if (!el) return null;
+  for (const a of el.querySelectorAll("a[href], [onclick]")) {
+    const m = ((a.getAttribute("href") || "") + " " + (a.getAttribute("onclick") || "")).match(FORM);
+    if (m) return m[0];
+  }
+  const m = el.innerHTML.replace(/&amp;/g, "&").match(FORM);
+  return m ? m[0] : null;
+};
+const stats = { courses: 0, pages: 0, activities: 0, urls: 0, opened: 0, errors: 0 };
+const scan = async id => {
+  const doc = await load(root + "/course/view.php?id=" + id);
+  stats.courses++;
+  const docs = [doc];
+  if (!doc.querySelector("li.activity")) {
+    // 「1ページに1セクション」のコースは、セクションのページを開く
+    const links = new Set();
+    doc.querySelectorAll("a[href]").forEach(a => {
+      const h = a.getAttribute("href") || "";
+      if (/\/course\/section\.php\?id=\d+/.test(h) || new RegExp("/course/view\\.php\\?id=" + id + "&(amp;)?section=\\d+").test(h)) links.add(new URL(h.replace(/&amp;/g, "&"), root + "/").href);
+    });
+    for (const l of Array.from(links).slice(0, 30)) { try { docs.push(await load(l)); stats.pages++; } catch (e) { stats.errors++; } }
+  }
+  const out = [];
+  const seen = new Set();
+  docs.forEach(d => d.querySelectorAll("li.activity").forEach(act => {
+    const cm = (act.id.match(/module-(\d+)/) || [])[1] || act.getAttribute("data-id");
+    if (!cm || seen.has(cm)) return;
+    seen.add(cm);
+    stats.activities++;
+    const mod = (act.className.match(/modtype_([a-z]+)/) || [])[1] || "?";
+    // サブセクションは中の活動を別に数える（中のリンクを自分のものにしない）
+    if (mod === "subsection") return;
+    if (mod === "url") stats.urls++;
+    // サブセクションの中の活動は、外側のセクションの名前（回・日付）も使う
+    const secs = [];
+    for (let e = act.closest("li.section, [data-for=section]"); e; e = e.parentElement && e.parentElement.closest("li.section, [data-for=section]")) secs.push(e);
+    const sec = secs[0];
+    const link = act.querySelector('a[href*="/mod/' + mod + '/view.php"]');
+    const form = formIn(act);
+    // 開けない（利用制限中の）活動はリンクがない。ラベルはリンク先のフォームがあれば対象
+    if (!link && !form) return;
+    const name = textOf(act.querySelector(".instancename, .activityname")) || clean(act.getAttribute("data-activityname"))
+      || textOf(act).slice(0, 80);
+    if (!form && !(mod === "url" || (mod === "page" && HINT.test(name)))) return;
+    out.push({
+      course: id, cm, mod, name: name.slice(0, 200), form,
+      url: link ? new URL(link.getAttribute("href").replace(/&amp;/g, "&"), root + "/").href : null,
+      section: secs.map(e => textOf(e.querySelector(".sectionname, h3, h4"))).filter(Boolean).join(" / ").slice(0, 160),
+      current: secs.some(e => e.classList.contains("current")),
+      position: sec ? Number(sec.getAttribute("data-number") || (sec.id.match(/section-(\d+)/) || [])[1] || 0) : 0,
+      dates: textOf(act.querySelector("[data-region=activity-dates], .activity-dates")).slice(0, 200),
+      text: textOf(act.querySelector(".activity-altcontent, .contentafterlink, .description, .activity-description, .contentwithoutlink")).slice(0, 400),
+      done: !!act.querySelector('[data-toggletype="manual:undo"]'),
+    });
+  }));
+  return out;
+};
+const found = [];
+for (let i = 0; i < ids.length; i += 4) {
+  const rs = await Promise.all(ids.slice(i, i + 4).map(id => scan(id).catch(() => { stats.errors++; return []; })));
+  rs.forEach(r => found.push(...r));
+}
+// URL・ページの活動は、そのページを開いてフォームへのリンクか確かめる
+// 今のセクション → フォームらしい名前 → 新しい（下の）セクションの順に開く
+// 前回までに確かめた URL の活動（cm → フォームの URL か ""）は開き直さない
+found.forEach(f => { if (!f.form && f.url && known && Object.prototype.hasOwnProperty.call(known, f.cm)) { f.form = known[f.cm] || null; f.cached = true; } });
+const todo = found.filter(f => !f.form && f.url && !f.cached)
+  .map(f => ({ f, k: (f.current ? 4 : 0) + (HINT.test(f.name) ? 2 : 0) }))
+  .sort((a, b) => b.k - a.k || b.f.position - a.f.position).map(x => x.f).slice(0, 500);
+stats.skippedPages = Math.max(0, found.filter(f => !f.form && f.url && !f.cached).length - todo.length);
+stats.cached = found.filter(f => f.cached).length;
+for (let i = 0; i < todo.length; i += 4) {
+  await Promise.all(todo.slice(i, i + 4).map(async f => {
+    try {
+      const u = new URL(f.url);
+      if (f.mod === "url") u.searchParams.set("forceview", "1");
+      const d = await load(u.href);
+      stats.opened++;
+      f.checked = true;
+      const main = d.querySelector("#region-main") || d.querySelector("[role=main]") || d.body;
+      f.form = formIn(main && main.querySelector(".urlworkaround")) || formIn(main);
+      if (f.form && !f.text) f.text = textOf(main).slice(0, 400);
+    } catch (e) { stats.errors++; }
+  }));
+}
+const checked = {};
+found.forEach(f => { if (f.checked) checked[f.cm] = f.form || ""; });
+return JSON.stringify({ forms: found.filter(f => f.form), checked, stats });
+`;
+
 /** 鈴テーマ（大学ページに重ねる最小限の配色。レイアウトは変えない） */
 const themeCSS = `
 body { font-family: "Yu Gothic UI", "Meiryo UI", "Meiryo", -apple-system, "Hiragino Sans", sans-serif !important; }
@@ -302,5 +421,5 @@ input[type=text], input[type=password] { border-radius: 12px !important; }
 
 module.exports = {
   autoLogin, moodleFetch, moodleMonth, campusPortlets, campusMenu, pageHeading, tableShapes,
-  campusTimetable, campusCancellations, largestTable, moodleSubmissionStatus, themeCSS,
+  campusTimetable, campusCancellations, largestTable, moodleSubmissionStatus, moodleCourseForms, themeCSS,
 };

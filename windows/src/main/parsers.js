@@ -62,7 +62,7 @@ function parseMoodle(json, config, log = () => {}, now = Date.now()) {
   const courses = rawCourses.filter(c => c.hidden !== true).map(c => ({
     id: c.id, fullName: plainText(c.fullname), shortName: plainText(c.shortname),
     category: c.coursecategory != null ? plainText(c.coursecategory) : null, progress: c.progress ?? null,
-    url: link(c.viewurl) ?? Urls.moodleCourse(config, c.id),
+    url: link(c.viewurl) ?? Urls.moodleCourse(config, c.id), endDate: c.enddate ? secToMs(c.enddate) : null,
   }));
 
   // 「開始」の予定は締切ではない。過ぎた予定は、まだ操作できる（遅れて提出できる）ものだけ残す
@@ -90,8 +90,19 @@ function parseMoodle(json, config, log = () => {}, now = Date.now()) {
     status: 'unknown',
   }));
   deadlines = deadlines.sort((a, c) => a.due - c.due);
+  // 月のカレンダーにだけある締切（提出ボタンのない課題など）。ページに外部フォームがあれば締切に加える（store.checkSubmissions）
+  const known = new Set(rawEvents.map(e => e.id));
+  const calendarDue = [];
+  for (const m of b.calendar ?? []) {
+    for (const w of m?.data?.weeks ?? []) for (const d of w.days ?? []) for (const e of d.events ?? []) {
+      if (known.has(e.id) || !isDue(e) || !e.modulename) continue;
+      known.add(e.id);
+      const due = secToMs(e.timesort ?? e.timestart ?? 0);
+      if (due >= now) calendarDue.push(makeDeadline(e, due, link, true));
+    }
+  }
   return {
-    courses, deadlines,
+    courses, deadlines, calendarDue,
     upcoming: rawUpcoming.map(e => eventItem(e, link)).sort((a, c) => a.start - c.start),
     notices, unreadCount: n?.unreadcount ?? notices.filter(x => !x.read).length, warnings,
   };
@@ -126,6 +137,95 @@ function parseMonth(json, config) {
 }
 
 const doneStatus = s => s === 'submitted' || s === 'formReceipt';
+
+/** /mod/xxx/view.php?id=123 → "123"（同じ活動かどうかの照合用） */
+function cmID(u) {
+  try { const x = new URL(u); return /\/mod\/[a-z]+\/view\.php$/.test(x.pathname) ? x.searchParams.get('id') : null; } catch { return null; }
+}
+
+/** 活動の日付欄（「開始: … 期限: 2026年 12月 2日(水曜日) 23:59」）から締切を読む */
+function activityDue(dates, now) {
+  const t = String(dates ?? '').replace(/\s+/g, '');
+  const all = DateExtractor.findAll(t, now);
+  if (!all.length) return null;
+  const hit = all.find(f => /(期限|終了|締切|締め切り|Due|Closes?)[:：]?$/i.test(t.slice(Math.max(0, f.start - 8), f.start)));
+  return hit ? hit.date : all.length > 1 ? all[all.length - 1].date : /(開始|Opens?)[:：]?$/i.test(t.slice(0, all[0].start)) ? null : all[0].date;
+}
+
+/** moodleCourseForms の結果を、締切のあるフォーム（deadlines）と、締切の書かれていないフォーム（forms）に分ける。
+ *  - 締切：活動の日付欄 →「12/2まで」などの文（名前・説明）の順に探す。過ぎたもの・表示期間より先のものは出さない
+ *  - 締切なし：今のセクション（Moodle の強調表示）か、セクション名の日付が前後7日以内か、
+ *    セクションに日付がないコースでは一番新しいセクションのものを recent にする（ホームの「やること」に出す） */
+function parseCourseForms(json, config, courses, known, now = Date.now(), windowDays = 30) {
+  let b;
+  try { b = JSON.parse(json); } catch { return { deadlines: [], forms: [], stats: null, skipped: 0, checked: {} }; }
+  const link = linker(config);
+  const byID = new Map(courses.map(c => [String(c.id), c]));
+  const seen = new Set(known);
+  const deadlines = [], forms = [];
+  let skipped = 0;
+  const raw = (b?.forms ?? []).filter(f => f && f.form && f.cm);
+  // セクション名の日付は授業の日（過ぎた日のことが多い）。2か月より先になるなら前の年とみなす（「6月2日」→ 今年の6月）
+  const sectionDate = f => {
+    const all = DateExtractor.findAll(String(f.section ?? '').normalize('NFKC').replace(/\s+/g, ''), now);
+    if (!all.length) return null;
+    const d = new Date(all[0].date);
+    if (d.getTime() > now + 60 * 86400e3) d.setFullYear(d.getFullYear() - 1);
+    return d.getTime();
+  };
+  const startToday = new Date(now).setHours(0, 0, 0, 0);
+  const undated = [];
+  for (const f of raw) {
+    const formURL = SafeURL.https(f.form);
+    const sdate = sectionDate(f);
+    const url = link(f.url);
+    const key = cmID(url) ?? `form:${formURL}`;
+    if (!formURL || seen.has(key)) continue;
+    seen.add(key);
+    const course = byID.get(String(f.course));
+    const title = plainText(f.name) || 'フォーム';
+    // 締切：日付欄 → 名前の「締切：12月2日」→ 説明文の「〜まで」のすぐ近くの日付（説明文の関係ない日付は使わない）
+    const nt = title.normalize('NFKC');
+    let due = activityDue(f.dates, now) ?? DateExtractor.findDeadline(nt, now) ?? DateExtractor.findMarked(plainText(f.text ?? '').normalize('NFKC'), now);
+    if (due == null && sdate != null) {
+      const day = new Date(sdate);
+      // 「次回授業前日夜23:59まで」「次回授業開始前まで」：授業は毎週なので、セクションの日の6日後 23:59
+      if (/次回(の)?授業(の)?(前日|開始前|前|まで)/.test(nt)) { day.setDate(day.getDate() + 6); day.setHours(23, 59, 0, 0); due = day.getTime(); }
+      // 「出席確認（15:30まで）」のように時刻だけのものは、セクションの日（授業の日）のその時刻
+      const tm = due == null ? nt.match(/(\d{1,2}):(\d{2})\s*(まで|締切|〆切)/) : null;
+      if (tm) { day.setHours(Number(tm[1]), Number(tm[2]), 0, 0); due = day.getTime(); }
+    }
+    const item = {
+      id: `f-${f.cm}`, title, course: course?.fullName ?? null, url: url ?? course?.url ?? null,
+      needsAction: true, module: f.mod ?? null, status: f.done ? 'submitted' : 'form', formURL,
+    };
+    if (due != null) {
+      if (due < now || due > now + windowDays * 86400e3) { skipped++; continue; }
+      deadlines.push({ ...item, due });
+    } else if (sdate != null && sdate < now - 30 * 86400e3) {
+      // 1か月以上前の回のフォーム（前学期など）は、もう受け付けていないとみなす
+      skipped++;
+    } else {
+      undated.push({ f, item, sdate });
+    }
+  }
+  // セクション名に日付のないコースは、フォームのある一番新しい（下の）セクションを今の回とみなす
+  const latest = new Map();
+  for (const u of undated) {
+    const c = String(u.f.course);
+    if (undated.some(x => String(x.f.course) === c && x.sdate != null)) continue;
+    latest.set(c, Math.max(latest.get(c) ?? -1, Number(u.f.position) || 0));
+  }
+  for (const u of undated) {
+    // 授業の日が今日を含む前6日〜7日後なら今の回（先週の同じ曜日の回は含めない）
+    const near = u.sdate != null && u.sdate >= startToday - 6 * 86400e3 && u.sdate <= now + 7 * 86400e3;
+    const last = latest.get(String(u.f.course)) === (Number(u.f.position) || 0);
+    forms.push({ ...u.item, due: null, recent: !!u.f.current || near || last, section: plainText(u.f.section ?? '') || null });
+  }
+  deadlines.sort((a, c) => a.due - c.due);
+  forms.sort((a, c) => (a.recent === c.recent ? 0 : a.recent ? -1 : 1));
+  return { deadlines, forms, stats: b?.stats ?? null, skipped, checked: b?.checked ?? {} };
+}
 
 /** Moodle の活動（課題・小テスト・アンケートなど）のページか。通知のリンク先の提出状況を確かめる対象 */
 function isActivityURL(u) {
@@ -172,6 +272,16 @@ const DateExtractor = {
       }
     }
     return out.sort((a, b) => a.start - b.start);
+  },
+
+  /** 「まで」「締切」などのすぐ近くにある日付だけを返す（長い文の中の関係ない日付を拾わない） */
+  findMarked(text, reference) {
+    for (const f of this.findAll(text, reference)) {
+      const around = text.slice(f.start, f.start + 24);
+      const before = text.slice(Math.max(0, f.start - 10), f.start);
+      if (this.markers.some(k => around.includes(k) || before.includes(k))) return f.date;
+    }
+    return null;
   },
 
   /** 「まで」「締切」などの近くにある日付を優先して1つ返す */
@@ -280,11 +390,13 @@ function coreTitle(title) {
 function hasReceipt(d, receipts) {
   const core = coreTitle(d.title);
   if ([...core].length < 3) return false;
+  // 締切の書かれていないフォームは、控えメールの日付を問わない（控えメールは180日分）
   return receipts.some(r => r.text.replace(/\s+/g, '').includes(core)
-    && r.date > d.due - 21 * 86400e3 && r.date < d.due + 86400e3);
+    && (d.due == null || (r.date > d.due - 21 * 86400e3 && r.date < d.due + 86400e3)));
 }
 
 module.exports = {
-  plainText, parseMoodle, parseMonth, ParseError, doneStatus, isActivityURL, DateExtractor, MailClassifier,
+  plainText, parseMoodle, parseMonth, ParseError, doneStatus, isActivityURL, cmID, activityDue, parseCourseForms,
+  DateExtractor, MailClassifier,
   parseFrom, convertGmail, coreTitle, hasReceipt,
 };

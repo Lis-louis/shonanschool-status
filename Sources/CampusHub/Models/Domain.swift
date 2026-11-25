@@ -70,6 +70,22 @@ struct Course: Identifiable, Hashable, Sendable {
     var category: String?
     var progress: Double?
     var url: URL?
+    /// コースの終了日（終わったコースのページは見に行かない）
+    var endDate: Date? = nil
+}
+
+/// コースのページで見つけた、締切の書かれていない外部フォーム（Google フォームなど）
+struct MoodleForm: Identifiable, Hashable, Sendable {
+    var id: String
+    var title: String
+    var course: String?
+    var url: URL?
+    var formURL: URL?
+    var module: String?
+    var status: SubmissionStatus = .form
+    /// 今の回のもの（ホームの「やること」に出す）。前の回のものは Moodle 画面に折りたたむ
+    var recent: Bool
+    var section: String?
 }
 
 struct MoodleNotice: Identifiable, Hashable, Sendable {
@@ -97,6 +113,12 @@ struct MoodleSnapshot: Sendable {
     var notices: [MoodleNotice]
     var unreadCount: Int
     var warnings: [String]
+    /// 月のカレンダーにだけある締切（提出ボタンのない課題など）。ページに外部フォームがあれば deadlines に加える
+    var calendarDue: [Deadline] = []
+    /// コースのページで見つけた、締切の書かれていないフォーム
+    var forms: [MoodleForm] = []
+    /// コースのページを裏で確認している間 true
+    var formsLoading = false
 }
 
 // MARK: - Campus Square

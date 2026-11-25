@@ -1,7 +1,7 @@
 {
   "name": "campushub",
   "productName": "キャンパスハブ",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "湘南工科大学の Moodle・Campus Square・大学メールを1つにまとめるアプリ（Windows版）",
   "author": "キャンパスハブ",
   "license": "MIT",
