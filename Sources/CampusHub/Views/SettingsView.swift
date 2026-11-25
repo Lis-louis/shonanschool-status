@@ -83,7 +83,7 @@ struct SettingsView: View {
                     .buttonStyle(SoftButtonStyle())
                     .disabled(store.updater.state == .checking)
                 }
-                Text("新しいバージョンが出ると自動でダウンロードし、画面の上に「更新する」が出ます。押すとインストーラーが開くので、案内に沿ってインストールしてください（Macのパスワードを聞かれます）。設定とログイン情報はそのまま引き継がれます。")
+                Text("新しいバージョンが出ると画面の上に知らせます。Mac 版は自分でビルドして使うので、ターミナルで git pull と ./scripts/build-app.sh --install を実行すると更新できます（「更新のしかた」で手順が開きます）。設定とログイン情報はそのまま引き継がれます。")
                     .font(.caption).foregroundStyle(p.subtle)
             }
 

@@ -85,7 +85,7 @@ final class AppStore {
     @ObservationIgnored let campusBrowser: BrowserController
     @ObservationIgnored private var sessions: [PortalService: HeadlessSession] = [:]
     @ObservationIgnored let google = GoogleAuth()
-    /// アプリの更新（GitHub Releases の .pkg）
+    /// 新しい版のお知らせ（GitHub Releases）
     let updater = AppUpdater()
 
     private static let configKey = "universityConfig.v2"

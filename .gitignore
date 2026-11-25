@@ -65,13 +65,12 @@ build/
 # macOS
 .DS_Store
 
-# 配布用のインストーラー（scripts/build-pkg.sh / build-windows.sh）
+# 配布用のインストーラー（scripts/build-windows.sh）
 dist/
 RFMT/
 
 # Windows 版のインストーラーは GitHub Releases で配る（リポジトリには入れない）
 /CampusHub-Setup-*.exe
-/CampusHub-*.pkg
 
 # 作業中に貼ったスクリーンショット（コミットしない）
 スクリーンショット*.png

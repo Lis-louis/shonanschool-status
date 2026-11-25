@@ -29,18 +29,37 @@
 
 ## Install
 
-Download the installer for your OS from [Releases (latest)](https://github.com/Lis-louis/shonanschool-status/releases/latest).
+On Windows, download the installer from [Releases (latest)](https://github.com/Lis-louis/shonanschool-status/releases/latest). There is no Mac installer: build it on your own Mac with the steps below (just copy and paste).
 
 | OS | File | Steps |
 |---|---|---|
 | Windows | `CampusHub-Setup-<version>.exe` from [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) | Run it and follow the setup (install location → Install). Installs for the current user, no administrator rights needed. Creates desktop and Start menu shortcuts |
-| macOS | `CampusHub-<version>.pkg` from [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) | Open it and follow the installer (Continue → Install; it asks for your Mac password). Installs キャンパスハブ.app into Applications and opens it when done. Runs on both Apple silicon and Intel Macs |
+| macOS | None (build it yourself) | Run three lines in Terminal as described in "[Installing on a Mac](#installing-on-a-mac)". Installs キャンパスハブ.app into Applications. Runs on both Apple silicon and Intel Macs |
 
 To uninstall: on Windows, use **Settings → Apps → Installed apps → キャンパスハブ → Uninstall**. On macOS, move キャンパスハブ from Applications to the Trash.
 
-> The installers are not code-signed yet, so the OS may warn you the first time.
-> Windows: if SmartScreen appears, click **More info → Run anyway**.
-> macOS: if it says the package can't be opened, go to **System Settings → Privacy & Security**, click **Open Anyway** near the bottom, then open the .pkg again (on macOS 14 you can also right-click → **Open**). The installed app then opens normally.
+> The installer is not code-signed yet, so SmartScreen may warn you the first time. Click **More info → Run anyway**.
+
+### Installing on a Mac
+
+There is no Mac installer (.pkg): an installer without Apple signing and notarization gets blocked by macOS and doesn't install properly. A copy you build on your own Mac runs without any warning.
+
+1. Open **Terminal** (Finder → Applications → Utilities → Terminal).
+2. First time only, install the build tools. Paste this, press Return, and click "Install" in the window that appears (if it says "already installed", you already have them).
+   ```sh
+   xcode-select --install
+   ```
+3. Paste these three lines and press Return. They download the source into `shonanschool-status` in your home folder, build it, and put it in Applications (takes a few minutes).
+   ```sh
+   cd ~ && git clone https://github.com/Lis-louis/shonanschool-status.git
+   cd ~/shonanschool-status
+   ./scripts/build-app.sh --install
+   ```
+4. When it says "インストールしました: /Applications/キャンパスハブ.app", you're done. Open **キャンパスハブ** from Applications.
+
+- If you see `swift: command not found` or `xcrun: error`, redo step 2.
+- If `git clone` says "already exists", you already have the source; start from the second line of step 3.
+- Keep the `shonanschool-status` folder after installing; you need it to update.
 
 ### Updates
 
@@ -58,22 +77,23 @@ To check right away, use **Settings → App → Check for updates** (or the menu
 
 #### macOS
 
-The Mac version (0.3.6 and later) also finds and downloads new versions by itself.
+When a new version comes out, the Mac version shows "**New version x.y.z is available [How to update (更新のしかた)]**" at the top of the window (it checks [Releases](https://github.com/Lis-louis/shonanschool-status/releases) at launch and every 3 hours after that). It doesn't replace itself, so run this in Terminal:
 
-1. At launch (and every 3 hours after that) it checks [Releases](https://github.com/Lis-louis/shonanschool-status/releases) for a newer `.pkg`
-2. If there is one, it downloads it in the background (checking that it matches the SHA-256 GitHub lists for it) and shows "**New version x.y.z is ready [Update (更新する)]**" at the top of the window
-3. Click **Update** (更新する) and the installer opens while CampusHub closes. Follow the installer (it asks for your Mac password) and the app reopens on the new version when it finishes
+```sh
+cd ~/shonanschool-status
+git pull
+./scripts/build-app.sh --install
+```
+
+CampusHub closes and the new version goes into Applications (your settings and sign-in details carry over). Open it again and you're done.
 
 To check right away, use **Settings → App → Check for updates** (or the menu **キャンパスハブ → アップデートを確認…**).
-
-> Unlike Windows, the Mac version never swaps itself silently when you quit, because writing to the Applications folder needs your Mac password.
-> Versions 0.3.5 and earlier (ones you built yourself) have no automatic updates, so install the `.pkg` from Releases once by hand (your settings and sign-in details carry over).
 
 ## Requirements
 
 - Windows 10 / 11, 64-bit (x64)
 - macOS 14 Sonoma or later
-- To build: Node.js LTS (Windows version), Xcode 16 or later / Swift 6 toolchain (Mac version)
+- To build: Node.js LTS (Windows version), Xcode 16 or later, or the Command Line Tools (`xcode-select --install`, with Swift 6) (Mac version)
 
 ## First-time setup
 
@@ -163,35 +183,30 @@ swift run                          # launch for development
 swift test                         # unit tests
 ```
 
-### Building the installers
+### Building the installer (Windows)
 
 | Installer | Command | Output |
 |---|---|---|
 | Windows `.exe` | `cd windows && npm run dist:win` (on Windows)<br>`./scripts/build-windows.sh` (on a Mac) | `dist/windows/CampusHub-Setup-<version>.exe` |
-| macOS `.pkg` | `./scripts/build-pkg.sh` (on a Mac) | `dist/CampusHub-<version>.pkg` (installs /Applications/キャンパスハブ.app; Apple silicon and Intel) |
 
-- The Mac `.pkg` can't be built on Windows. The Windows `.exe` can also be built on a Mac (`./scripts/build-windows.sh --run` to preview the screens, `--test` to run the tests only).
+- The Windows `.exe` can also be built on a Mac (`./scripts/build-windows.sh --run` to preview the screens, `--test` to run the tests only).
+- The Mac version has no installer; everyone installs it with `./scripts/build-app.sh --install` (see "[Installing on a Mac](#installing-on-a-mac)").
 
 ### Publishing a new version (Windows and macOS)
 
-Windows and Mac share one version number: `"version"` in `windows/package.json` (the Mac scripts `scripts/build-app.sh` and `build-pkg.sh` read it from there too).
+Windows and Mac share one version number: `"version"` in `windows/package.json` (the Mac script `scripts/build-app.sh` reads it from there too).
 
 1. Make your changes
 2. Bump `"version"` in `windows/package.json` (e.g. `0.3.6` → `0.3.7`)
 3. Push to main
 
-GitHub Actions then runs the tests, builds the installers, and publishes them to [Releases](https://github.com/Lis-louis/shonanschool-status/releases) (tag `v<version>`). Both versions go into the same Release.
+GitHub Actions (`.github/workflows/release-windows.yml`) then runs the tests, builds the Windows installer, and publishes it to [Releases](https://github.com/Lis-louis/shonanschool-status/releases) (tag `v<version>`): `CampusHub-Setup-<version>.exe`, `.exe.blockmap`, and `latest.yml`.
 
-| | Workflow | Files added to the Release |
-|---|---|---|
-| Windows | `.github/workflows/release-windows.yml` (runs on Windows) | `CampusHub-Setup-<version>.exe`, `.exe.blockmap`, `latest.yml` |
-| macOS | `.github/workflows/release-mac.yml` (runs on macOS) | `CampusHub-<version>.pkg` |
-
-Once it is published, installed copies of the app show "Restart to update" (Windows) or "Update" (Mac).
+Once it is published, installed Windows copies show "Restart to update". The Mac version shows "a new version is available", and each user runs `git pull` and rebuilds.
 
 - Pushing without bumping `version` does nothing (the Release for that version already has its files).
-- Follow progress in the **Actions** tab on GitHub. To run one by hand: Actions → "Windows 版をリリース" / "Mac 版をリリース" → **Run workflow**. This also re-uploads any missing files after a failed run.
-- Windows finds new versions through `latest.yml`, and the Mac version through `CampusHub-<version>.pkg` (and the SHA-256 GitHub attaches to it), so don't delete them.
+- Follow progress in the **Actions** tab on GitHub. To run it by hand: Actions → "Windows 版をリリース" → **Run workflow**. This also re-uploads any missing files after a failed run.
+- Windows finds new versions through `latest.yml`, and the Mac version through the Release tag (`v<version>`), so don't delete them.
 
 ## Troubleshooting
 
@@ -233,20 +248,19 @@ windows/                  Windows version (Electron)
 └─ test/                  unit tests (npm test)
 icon/                     app icon source (SVG)
 packaging/                Mac icons (.icns, PNG)
-scripts/                  build scripts for the .app, .pkg, and Windows .exe
-.github/workflows/        GitHub Actions that publish the Windows and Mac versions to Releases
+scripts/                  build scripts for the Mac .app and Windows .exe
+.github/workflows/        GitHub Actions that publish the Windows version to Releases
 ```
 
 ## Status
 
 | Item | Status |
 |---|---|
-| Mac version (SwiftUI) | Done (installer and automatic updates) |
+| Mac version (SwiftUI) | Done (build it yourself; notifies you of new versions) |
 | Windows version (Electron) | Done (installer and automatic updates) |
 | Moodle / Campus Square sign-in and reading | Done |
 | Gmail connection and sorting | Done |
-| Distributing the Mac installer (.pkg) | Done (Releases; Apple silicon and Intel) |
-| Automatic updates for the Mac version | Done (0.3.6 and later; opens the installer to update) |
+| Distributing the Mac installer (.pkg) | Dropped (unsigned, unnotarized installers don't install reliably; switched to building it yourself) |
 
 ### Unconfirmed and estimated values
 

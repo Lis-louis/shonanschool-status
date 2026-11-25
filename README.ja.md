@@ -28,18 +28,37 @@
 
 ## インストール
 
-[Releases（最新版）](https://github.com/Lis-louis/shonanschool-status/releases/latest) から、お使いの OS のインストーラーをダウンロードしてください。
+Windows は [Releases（最新版）](https://github.com/Lis-louis/shonanschool-status/releases/latest) からインストーラーをダウンロードしてください。Mac は、インストーラーを配っていないので、下の手順で自分の Mac でビルドして入れてください（コピーして貼り付けるだけです）。
 
 | OS | ファイル | 手順 |
 |---|---|---|
 | Windows | [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) の `CampusHub-Setup-<バージョン>.exe` | 実行してセットアップの案内に従う（インストール先 → インストール）。自分のユーザー用にインストールするので管理者権限は不要。デスクトップとスタートメニューにショートカットができます |
-| macOS | [Releases](https://github.com/Lis-louis/shonanschool-status/releases/latest) の `CampusHub-<バージョン>.pkg` | 開いてインストーラーの案内に従う（続ける → インストール。Mac のパスワードを聞かれます）。「アプリケーション」に キャンパスハブ.app が入り、終わると自動で開きます。Apple シリコン・Intel の両方で動きます |
+| macOS | なし（自分でビルド） | 下の「[Mac 版の入れ方](#mac-版の入れ方)」のとおり、ターミナルで 3 行実行する。「アプリケーション」に キャンパスハブ.app が入ります。Apple シリコン・Intel の両方で動きます |
 
 アンインストール：Windows は **設定 → アプリ → インストールされているアプリ → キャンパスハブ → アンインストール**。macOS は「アプリケーション」の キャンパスハブ をゴミ箱へ。
 
-> インストーラーはまだコード署名していないため、初回に OS の警告が出ることがあります。
-> Windows：SmartScreen が出たときは **詳細情報 → 実行** をクリック。
-> macOS：「開けません」と出たときは、**システム設定 → プライバシーとセキュリティ** の下のほうにある「このまま開く」をクリックしてから、もう一度 .pkg を開いてください（macOS 14 では「右クリック → 開く」でも開けます）。インストールしたアプリはそのまま起動できます。
+> インストーラーはまだコード署名していないため、初回に SmartScreen が出ることがあります。そのときは **詳細情報 → 実行** をクリックしてください。
+
+### Mac 版の入れ方
+
+Mac 版はインストーラー（.pkg）を配っていません（署名・公証のないインストーラーは Mac にはじかれてうまく入らないため）。自分の Mac でビルドすると、警告なしでそのまま使えます。
+
+1. **ターミナル** を開きます（Finder →「アプリケーション」→「ユーティリティ」→「ターミナル」）。
+2. はじめてのときだけ、ビルドに使う道具を入れます。次を貼り付けて Return を押し、出てきた画面で「インストール」を押します（「already installed」と出たら、もう入っているので次へ）。
+   ```sh
+   xcode-select --install
+   ```
+3. 次の 3 行を貼り付けて Return を押します。ソースをホームフォルダの `shonanschool-status` に取ってきて、ビルドし、「アプリケーション」に入れます（数分かかります）。
+   ```sh
+   cd ~ && git clone https://github.com/Lis-louis/shonanschool-status.git
+   cd ~/shonanschool-status
+   ./scripts/build-app.sh --install
+   ```
+4. 「インストールしました: /Applications/キャンパスハブ.app」と出たら完了です。「アプリケーション」の **キャンパスハブ** を開いてください。
+
+- `swift: command not found` や `xcrun: error` と出たときは、手順 2 をやり直してください。
+- `git clone` で「already exists」と出たときは、もう取ってきてあります。手順 3 の 2 行目から実行してください。
+- 入れたあとは `shonanschool-status` フォルダを消さないでください（アップデートのときに使います）。
 
 ### アップデート
 
@@ -57,22 +76,23 @@ Windows 版（0.3.0 以降）は自動でアップデートします。
 
 #### Mac 版
 
-Mac 版（0.3.6 以降）も、新しいバージョンを自動で見つけてダウンロードします。
+Mac 版は、新しいバージョンが出ると画面の上に「**新しいバージョン x.y.z が出ています［更新のしかた］**」と知らせます（起動したときと、その後 3 時間ごとに [Releases](https://github.com/Lis-louis/shonanschool-status/releases) を確認します）。自動では入れ替わらないので、ターミナルで次を実行してください。
 
-1. 起動したとき（とその後 3 時間ごと）に、[Releases](https://github.com/Lis-louis/shonanschool-status/releases) に新しいバージョンの `.pkg` がないか確認します
-2. あれば裏でダウンロードし（GitHub に載っている SHA-256 と一致するか確かめます）、画面の上に「**新しいバージョン x.y.z の準備ができました［更新する］**」が出ます
-3. **更新する** を押すとインストーラーが開き、キャンパスハブは一度閉じます。案内に沿ってインストールすると（Mac のパスワードを聞かれます）、終わったときに新しいバージョンで開き直します
+```sh
+cd ~/shonanschool-status
+git pull
+./scripts/build-app.sh --install
+```
+
+キャンパスハブは一度閉じ、新しいバージョンが「アプリケーション」に入ります（設定・ログイン情報はそのまま引き継がれます）。開き直せば完了です。
 
 **設定 → アプリ → アップデートを確認**（またはメニューの **キャンパスハブ → アップデートを確認…**）で、すぐに確認することもできます。
-
-> Windows 版と違い、終了するときに黙って入れ替えることはしません（「アプリケーション」フォルダへの書き込みに Mac のパスワードが必要なため）。
-> 0.3.5 以前（自分でビルドしたもの）には自動アップデートがないため、一度だけ Releases から `.pkg` を入れてください（設定・ログイン情報はそのまま引き継がれます）。
 
 ## 動作環境
 
 - Windows 10 / 11 の 64 ビット版（x64）
 - macOS 14 Sonoma 以降
-- ビルドする場合：Node.js の LTS 版（Windows 版）、Xcode 16 以降 / Swift 6 ツールチェーン（Mac 版）
+- ビルドする場合：Node.js の LTS 版（Windows 版）、Xcode 16 以降、または Command Line Tools（`xcode-select --install`。Swift 6 が入っているもの）（Mac 版）
 
 ## はじめての設定
 
@@ -162,35 +182,30 @@ swift run                          # 開発用に起動
 swift test                         # 単体テスト
 ```
 
-### インストーラーの作成
+### インストーラーの作成（Windows 版）
 
 | インストーラー | コマンド | できるもの |
 |---|---|---|
 | Windows `.exe` | `cd windows && npm run dist:win`（Windows で）<br>`./scripts/build-windows.sh`（Mac で） | `dist/windows/CampusHub-Setup-<バージョン>.exe` |
-| macOS `.pkg` | `./scripts/build-pkg.sh`（Mac で） | `dist/CampusHub-<バージョン>.pkg`（/Applications/キャンパスハブ.app に入る。Apple シリコン・Intel 両対応） |
 
-- Mac の `.pkg` は Windows では作れません。Windows の `.exe` は Mac 上でも作れます（`./scripts/build-windows.sh --run` で画面の確認、`--test` でテストだけ）。
+- Windows の `.exe` は Mac 上でも作れます（`./scripts/build-windows.sh --run` で画面の確認、`--test` でテストだけ）。
+- Mac 版はインストーラーを作らず、`./scripts/build-app.sh --install` で各自が入れます（上の「[Mac 版の入れ方](#mac-版の入れ方)」）。
 
 ### 新しいバージョンの配り方（Windows 版・Mac 版）
 
-バージョンは Windows 版と Mac 版で共通です（`windows/package.json` の `"version"`。Mac 版の `scripts/build-app.sh`・`build-pkg.sh` もここから読みます）。
+バージョンは Windows 版と Mac 版で共通です（`windows/package.json` の `"version"`。Mac 版の `scripts/build-app.sh` もここから読みます）。
 
 1. 直したいところを直す
 2. `windows/package.json` の `"version"` を上げる（例：`0.3.6` → `0.3.7`）
 3. main に push する
 
-あとは GitHub Actions が、テスト → インストーラーのビルド → [Releases](https://github.com/Lis-louis/shonanschool-status/releases) への公開（タグ `v<バージョン>`）まで自動で行います。Windows 版と Mac 版は同じ Release に入ります。
+あとは GitHub Actions（`.github/workflows/release-windows.yml`）が、テスト → Windows 版インストーラーのビルド → [Releases](https://github.com/Lis-louis/shonanschool-status/releases) への公開（タグ `v<バージョン>`）まで自動で行います。Release に上がるのは `CampusHub-Setup-<バージョン>.exe`・`.exe.blockmap`・`latest.yml` です。
 
-| | ワークフロー | Release に上がるもの |
-|---|---|---|
-| Windows 版 | `.github/workflows/release-windows.yml`（Windows で動く） | `CampusHub-Setup-<バージョン>.exe`・`.exe.blockmap`・`latest.yml` |
-| Mac 版 | `.github/workflows/release-mac.yml`（macOS で動く） | `CampusHub-<バージョン>.pkg` |
-
-公開されると、インストール済みのアプリに「再起動して更新」（Windows）／「更新する」（Mac）が出ます。
+公開されると、インストール済みの Windows 版に「再起動して更新」が出ます。Mac 版には「新しいバージョンが出ています」と出るので、各自が `git pull` してビルドし直します。
 
 - `version` を上げずに push したときは何もしません（同じバージョンの Release にファイルがそろっているため）。
-- 進み具合は GitHub の **Actions** タブで見られます。手動で動かすときは Actions → 「Windows 版をリリース」／「Mac 版をリリース」→ **Run workflow**。途中で失敗したときも、これで足りないファイルを上げ直せます。
-- Windows 版は `latest.yml`、Mac 版は `CampusHub-<バージョン>.pkg`（と GitHub が付ける SHA-256）を見て新しいバージョンに気づくので、消さないでください。
+- 進み具合は GitHub の **Actions** タブで見られます。手動で動かすときは Actions → 「Windows 版をリリース」→ **Run workflow**。途中で失敗したときも、これで足りないファイルを上げ直せます。
+- Windows 版は `latest.yml`、Mac 版は Release のタグ（`v<バージョン>`）を見て新しいバージョンに気づくので、消さないでください。
 
 ## うまく読み込めないとき
 
@@ -232,20 +247,19 @@ windows/                  Windows 版（Electron）
 └─ test/                  単体テスト（npm test）
 icon/                     アプリアイコンの元画像（SVG）
 packaging/                Mac 用のアイコン（.icns・PNG）
-scripts/                  .app / .pkg / Windows 版 .exe のビルドスクリプト
-.github/workflows/        Windows 版・Mac 版を Releases に公開する GitHub Actions
+scripts/                  Mac 版 .app / Windows 版 .exe のビルドスクリプト
+.github/workflows/        Windows 版を Releases に公開する GitHub Actions
 ```
 
 ## 開発状況
 
 | 項目 | 状態 |
 |---|---|
-| Mac 版（SwiftUI） | 完成（インストーラー・自動アップデートあり） |
+| Mac 版（SwiftUI） | 完成（各自ビルド。新しいバージョンのお知らせあり） |
 | Windows 版（Electron） | 完成（インストーラー・自動アップデートあり） |
 | Moodle・Campus Square の自動ログインと読み取り | 完成 |
 | Gmail の連携と自動仕分け | 完成 |
-| Mac 版インストーラー（.pkg）の配布 | 完成（Releases。Apple シリコン・Intel 両対応） |
-| Mac 版の自動アップデート | 完成（0.3.6 以降。インストーラーを開いて更新） |
+| Mac 版インストーラー（.pkg）の配布 | やめた（署名・公証なしではうまく入らないため。各自ビルドに切り替え） |
 
 ### 未確定・推定の値
 

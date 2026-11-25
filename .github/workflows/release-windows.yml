@@ -79,7 +79,7 @@ jobs:
           set -euo pipefail
           exe="CampusHub-Setup-$V.exe"
           ls -la "$exe" "$exe.blockmap" latest.yml
-          # Mac 版のワークフロー（release-mac.yml）が同じ Release を同時に作ることがあるので、作れなければ（もうあれば）上げるだけにする
+          # Release がもうあれば（Run workflow で上げ直すときなど）上げるだけにする
           if ! gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "v$V" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$V" --generate-notes \
               || gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null

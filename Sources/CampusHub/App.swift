@@ -97,16 +97,11 @@ struct UpdateBanner: View {
         let u = store.updater
         HStack(spacing: 10) {
             switch u.state {
-            case .downloading(let v, let percent):
-                ProgressView().controlSize(.small)
-                Text("新しいバージョン \(v) をダウンロード中…（\(percent)%）").frame(maxWidth: .infinity, alignment: .leading)
-                Button { u.hiddenVersion = v } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).foregroundStyle(p.subtle).help("閉じる")
-            case .ready(let v, _):
+            case .available(let v):
                 Image(systemName: "sparkles").foregroundStyle(p.accent)
-                Text("新しいバージョン \(v) の準備ができました。「更新する」を押すとインストーラーが開きます（キャンパスハブは一度閉じます）")
+                Text("新しいバージョン \(v) が出ています（今は \(AppUpdater.currentVersion)）。ソースを取り込んでビルドし直すと更新できます")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Button { u.install() } label: { Label("更新する", systemImage: "arrow.triangle.2.circlepath") }
+                Button { u.openHowToUpdate() } label: { Label("更新のしかた", systemImage: "book") }
                     .buttonStyle(PrimaryButtonStyle())
                 Button("あとで") { u.hiddenVersion = v }.buttonStyle(SoftButtonStyle())
             default:

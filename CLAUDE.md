@@ -16,21 +16,19 @@
   裏でダウンロード → 画面上部に「再起動して更新」（`app.js` の `updateBanner`）。押さなくても終了時に入れ替わる。
 - 0.3.0 で導入。0.2.0 以前は自動更新がないので、利用者は一度だけ手で入れ直す必要がある。
 
-## Mac 版の配布と自動更新（2026-11-24 に追加）
+## Mac 版の配布（2026-11-25 に .pkg 配布をやめ、各自ビルドに切り替え）
 
-- 版は Windows 版と共通で、`windows/package.json` の `version` が唯一の元。`scripts/build-app.sh` が Info.plist の
-  `CFBundleShortVersionString` に、`scripts/build-pkg.sh` が `dist/CampusHub-<版>.pkg` の名前に使う（`APP_VERSION`／`VERSION` で上書き可）。
-- .app は arm64 + x86_64 のユニバーサル（`ARCHS="arm64"` で片方だけ）。ad-hoc 署名のみ・公証なし。
-  .pkg には postinstall があり、画面からインストールしたときだけ、コンソールのユーザーでアプリを開き直す。
-- 配布：`.github/workflows/release-mac.yml`（macos-15）。main への push で、その版の Release に `CampusHub-<版>.pkg` が無ければ
-  swift test → build-pkg.sh → 同じ Release に上げる。Windows 用と同時に走っても、Release を作れなければ（もうあれば）上げるだけにした（両方のワークフロー）。
-- アプリ側：`Sources/CampusHub/Services/AppUpdater.swift`（Sparkle は使わない簡易版）。.app で起動したときだけ、起動10秒後と3時間ごとに
-  GitHub API の releases を見て、`CampusHub-<版>.pkg` があり今より新しい最新の版を選ぶ（`UpdateCheck.pick`、テストあり）→ 裏でダウンロードし、
-  転送先ホスト・大きさ・GitHub の `digest`（SHA-256）が一致したら `~/Library/Caches/CampusHub/Updates/` に置く →
-  画面上部の `UpdateBanner`「更新する」でインストーラーを開いてアプリを終了。設定の「アプリ」カードとメニュー「アップデートを確認…」で手動確認。
-  Windows と違い終了時の黙った入れ替えはしない（/Applications への書き込みに管理者の確認が要るため）。
-- **未確認**：実際に Release に .pkg が上がった状態でのダウンロード〜更新の一連の流れ。最初の Mac 用 Release ができたら
-  `APP_VERSION=0.3.5 ./scripts/build-app.sh --install` で古い版を入れ、バナー →「更新する」→ インストール → 開き直しまで確かめること。
+- 一度 .pkg（`scripts/build-pkg.sh`・`.github/workflows/release-mac.yml`）で配ったが、署名・公証なしの .pkg は
+  利用者の Mac でうまくインストールできなかったため廃止した（ファイルも削除済み）。Release に .pkg は上げない。
+- Mac の利用者は README の「Mac 版の入れ方」どおり `git clone` → `./scripts/build-app.sh --install`。更新は `git pull` → 同じコマンド。
+- 版は Windows 版と共通で、`windows/package.json` の `version` が唯一の元（`build-app.sh` が Info.plist の
+  `CFBundleShortVersionString` に入れる。`APP_VERSION` で上書き可）。.app は arm64 + x86_64 のユニバーサル（`ARCHS="arm64"` で片方だけ）。
+- アプリ側：`Sources/CampusHub/Services/AppUpdater.swift` は**お知らせだけ**。.app で起動したときだけ、起動10秒後と3時間ごとに
+  GitHub API の releases を見て、今より新しい版のタグ（下書き・プレリリース以外）があれば（`UpdateCheck.pick`、テストあり）
+  画面上部の `UpdateBanner` に「新しいバージョン x が出ています」と「更新のしかた」（README.ja.md の `#mac-版` を開く）を出す。
+  ダウンロード・入れ替えはしない。README の見出し「#### Mac 版」を変えるときは `UpdateCheck.howToUpdateURL` も直すこと。
+- **未確認**：お知らせの表示。`APP_VERSION=0.3.5 ./scripts/build-app.sh --install` で古い版として入れ、起動10秒後にバナーが出て
+  「更新のしかた」で README が開くこと。
 
 ## Mac で確認が必要な変更（Windows 上で書いたもの）
 
